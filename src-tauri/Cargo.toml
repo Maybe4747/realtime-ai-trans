@@ -22,13 +22,23 @@ tauri = { version = "2", features = ["macos-private-api", "tray-icon"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-screencapturekit = { version = "7.0.1", features = ["async", "macos_13_0"] }
 hound = "3.5.1"
-tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.1", version = "2.1.0" }
-objc2 = "0.6.4"
-objc2-app-kit = "0.3.2"
-objc2-foundation = "0.3.2"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "sync", "macros"] }
 futures-util = "0.3.32"
 reqwest = { version = "0.13.4", features = ["json", "multipart", "stream"] }
 rusqlite = { version = "0.32.1", features = ["bundled"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+screencapturekit = { version = "7.0.1", features = ["async", "macos_13_0"] }
+tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.1", version = "2.1.0" }
+objc2 = "0.6.4"
+objc2-app-kit = "0.3.2"
+objc2-foundation = "0.3.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Media_Audio",
+    "Win32_Media_KernelStreaming",
+    "Win32_System_Com",
+] }

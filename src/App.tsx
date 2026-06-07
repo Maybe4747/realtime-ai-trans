@@ -725,7 +725,7 @@ function SettingsView({
           <p>设置</p>
           <span>修改服务连接或字幕显示后，点击右侧按钮保存。</span>
         </div>
-        <Button onClick={onSave} disabled={saving}>
+        <Button onClick={() => onSave()} disabled={saving}>
           <KeyRoundIcon data-icon="inline-start" />
           {saving ? "保存中" : "保存设置"}
         </Button>

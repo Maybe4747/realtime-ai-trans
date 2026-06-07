@@ -1,9 +1,12 @@
-// Phase 0 · Spike B —— 全屏悬浮字幕窗
-// 验证:字幕窗能浮在全屏 app 之上(NSPanel + collectionBehavior),且鼠标穿透。
-
 use tauri::{AppHandle, Manager};
+
+#[cfg(target_os = "windows")]
+use tauri::PhysicalPosition;
+
+#[cfg(target_os = "macos")]
 use tauri_nspanel::{tauri_panel, CollectionBehavior, PanelLevel, StyleMask, WebviewWindowExt};
 
+#[cfg(target_os = "macos")]
 tauri_panel! {
     panel!(SubtitlePanel {
         config: {
@@ -13,33 +16,36 @@ tauri_panel! {
     })
 }
 
-/// 把 subtitle 窗转成可浮于全屏之上的 non-activating 面板。
 pub fn setup_overlay(app: &AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window("subtitle")
         .ok_or("找不到 subtitle 窗口")?;
 
-    let panel = window
-        .to_panel::<SubtitlePanel>()
-        .map_err(|e| format!("转 panel 失败: {e}"))?;
+    #[cfg(target_os = "macos")]
+    {
+        let panel = window
+            .to_panel::<SubtitlePanel>()
+            .map_err(|e| format!("转 panel 失败: {e}"))?;
+        panel.set_level(PanelLevel::Floating.value());
+        panel.set_style_mask(StyleMask::empty().nonactivating_panel().into());
+        panel.set_collection_behavior(
+            CollectionBehavior::new()
+                .full_screen_auxiliary()
+                .can_join_all_spaces()
+                .into(),
+        );
+        panel.show();
+    }
 
-    // 浮动层级
-    panel.set_level(PanelLevel::Floating.value());
+    #[cfg(target_os = "windows")]
+    {
+        position_windows_subtitle(&window)?;
+        window.set_always_on_top(true).map_err(|e| e.to_string())?;
+        window.set_decorations(false).map_err(|e| e.to_string())?;
+        window.set_skip_taskbar(true).map_err(|e| e.to_string())?;
+        let _ = window.set_shadow(false);
+    }
 
-    // non-activating:面板不抢焦点、不激活 app
-    panel.set_style_mask(StyleMask::empty().nonactivating_panel().into());
-
-    // 关键:浮于全屏 app 之上 + 出现在所有 Space
-    panel.set_collection_behavior(
-        CollectionBehavior::new()
-            .full_screen_auxiliary()
-            .can_join_all_spaces()
-            .into(),
-    );
-
-    panel.show();
-
-    // 默认整窗鼠标穿透(spike 阶段)。点击直达底层视频。
     window
         .set_ignore_cursor_events(true)
         .map_err(|e| format!("设置鼠标穿透失败: {e}"))?;
@@ -47,7 +53,29 @@ pub fn setup_overlay(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// 切换字幕窗鼠标穿透(true=穿透,点击直达视频;false=可交互/可拖)。
+#[cfg(target_os = "windows")]
+fn position_windows_subtitle(window: &tauri::WebviewWindow) -> Result<(), String> {
+    const BOTTOM_MARGIN: i32 = 32;
+
+    let monitor = window
+        .primary_monitor()
+        .map_err(|e| e.to_string())?
+        .ok_or("找不到主显示器")?;
+    let work_area = monitor.work_area();
+    let window_size = window.outer_size().map_err(|e| e.to_string())?;
+
+    let x = work_area.position.x
+        + ((work_area.size.width as i32 - window_size.width as i32) / 2).max(0);
+    let y = work_area.position.y
+        + work_area.size.height as i32
+        - window_size.height as i32
+        - BOTTOM_MARGIN;
+
+    window
+        .set_position(PhysicalPosition::new(x, y.max(work_area.position.y)))
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn set_subtitle_click_through(app: AppHandle, ignore: bool) -> Result<(), String> {
     let window = app
