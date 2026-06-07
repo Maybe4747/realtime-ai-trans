@@ -256,6 +256,7 @@ pub fn start_capture(app: AppHandle) -> Result<(), String> {
         .map_err(|e| format!("启动采集失败(检查屏幕录制权限): {e:?}"))?;
 
     *guard = Some(stream);
+    drop(guard);
     emit_capture_state(&app, "正在同传系统音频");
     Ok(())
 }
@@ -263,7 +264,10 @@ pub fn start_capture(app: AppHandle) -> Result<(), String> {
 /// 停止同传。drop stream → drop handler → drop tx → 处理线程退出。
 #[tauri::command]
 pub fn stop_capture(app: AppHandle) -> Result<(), String> {
-    let stream = STREAM.lock().unwrap().take().ok_or("当前未在运行")?;
+    let stream = {
+        let mut guard = STREAM.lock().unwrap();
+        guard.take().ok_or("当前未在运行")?
+    };
     stream
         .stop_capture()
         .map_err(|e| format!("停止采集失败: {e:?}"))?;
