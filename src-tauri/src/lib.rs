@@ -1,5 +1,6 @@
 mod asr;
 mod audio;
+mod db;
 mod overlay;
 mod translate;
 
@@ -14,11 +15,16 @@ pub fn run() {
             if let Err(e) = overlay::setup_overlay(app.handle()) {
                 eprintln!("[overlay] 初始化失败: {e}");
             }
+            if let Err(e) = db::init(app.handle()) {
+                eprintln!("[db] 初始化失败: {e}");
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             audio::start_capture,
             audio::stop_capture,
+            db::get_app_config,
+            db::save_app_config,
             overlay::set_subtitle_click_through,
         ])
         .run(tauri::generate_context!())

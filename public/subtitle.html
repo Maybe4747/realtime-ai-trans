@@ -57,11 +57,12 @@
 <script>
   const enEl = document.getElementById("en");
   const zhEl = document.getElementById("zh");
-  const MIN_DWELL_MS = 1800;
-  const MAX_DWELL_MS = 4200;
+  let minDwellMs = 1800;
+  let maxDwellMs = 4200;
   const CHAR_DWELL_MS = 80;
   const ORDER_GRACE_MS = 250;
-  const MAX_QUEUE = 5;
+  let maxQueue = 5;
+  let subtitleMode = "bilingual";
 
   const records = new Map();
   const displayQueue = [];
@@ -82,15 +83,17 @@
   }
 
   function dwellMs(text) {
-    let ms = clamp(1400 + Array.from(text || "").length * CHAR_DWELL_MS, MIN_DWELL_MS, MAX_DWELL_MS);
+    let ms = clamp(1400 + Array.from(text || "").length * CHAR_DWELL_MS, minDwellMs, maxDwellMs);
     if (displayQueue.length >= 3) ms = Math.min(ms, 1600);
-    if (displayQueue.length >= MAX_QUEUE) ms = Math.min(ms, 1000);
+    if (displayQueue.length >= maxQueue) ms = Math.min(ms, 1000);
     return ms;
   }
 
   function renderRecord(record) {
     const { id, original, translated, status } = record;
     currentId = id;
+    enEl.style.display = subtitleMode === "zh_only" ? "none" : "";
+    zhEl.style.display = subtitleMode === "en_only" ? "none" : "";
 
     const enPartial = status === "asr_partial";
     enEl.className = enPartial ? "en partial" : "en";
@@ -128,7 +131,14 @@
     if (id <= lastDisplayedDoneId || displayQueue.includes(id)) return;
     displayQueue.push(id);
     displayQueue.sort((a, b) => a - b);
-    while (displayQueue.length > MAX_QUEUE) displayQueue.shift();
+    while (displayQueue.length > maxQueue) displayQueue.shift();
+  }
+
+  function onSubtitleConfig(p) {
+    subtitleMode = p.subtitleMode || subtitleMode;
+    minDwellMs = Number(p.minDwellMs) || minDwellMs;
+    maxDwellMs = Number(p.maxDwellMs) || maxDwellMs;
+    maxQueue = Number(p.maxQueue) || maxQueue;
   }
 
   function schedule(delay) {
@@ -198,6 +208,7 @@
   function bind() {
     if (window.__TAURI__ && window.__TAURI__.event) {
       window.__TAURI__.event.listen("subtitle", (e) => onSubtitle(e.payload));
+      window.__TAURI__.event.listen("subtitle_config", (e) => onSubtitleConfig(e.payload));
     } else {
       setTimeout(bind, 80);
     }

@@ -9,6 +9,7 @@ use screencapturekit::prelude::*;
 use tauri::AppHandle;
 
 use crate::asr;
+use crate::db;
 use crate::translate;
 
 const SRC_RATE: usize = 48_000;
@@ -116,17 +117,28 @@ impl SCStreamOutputTrait for Capture {
 
 static STREAM: Mutex<Option<SCStream>> = Mutex::new(None);
 
-/// 开始同传:采集→VAD→ASR→翻译。需 GLM_API_KEY、DEEPSEEK_API_KEY 与屏幕录制权限。
+/// 开始同传:采集→VAD→ASR→翻译。需先在设置中配置 provider key 与屏幕录制权限。
 #[tauri::command]
 pub fn start_capture(app: AppHandle) -> Result<(), String> {
     let mut guard = STREAM.lock().unwrap();
     if guard.is_some() {
         return Err("已在运行".into());
     }
-    let asr_key = std::env::var("GLM_API_KEY")
-        .map_err(|_| "未设置 GLM_API_KEY 环境变量".to_string())?;
-    let translate_key = std::env::var("DEEPSEEK_API_KEY")
-        .map_err(|_| "未设置 DEEPSEEK_API_KEY 环境变量".to_string())?;
+    let config = db::load_config(&app)?;
+    if config.asr_provider != "zhipu_glm_asr" {
+        return Err(format!("暂不支持 ASR provider: {}", config.asr_provider));
+    }
+    if config.llm_provider != "deepseek_v4_flash" {
+        return Err(format!("暂不支持 LLM provider: {}", config.llm_provider));
+    }
+    let asr_key = config.asr_api_key.trim().to_string();
+    if asr_key.is_empty() {
+        return Err("请先在设置中配置 ASR API key".to_string());
+    }
+    let translate_key = config.llm_api_key.trim().to_string();
+    if translate_key.is_empty() {
+        return Err("请先在设置中配置 LLM translation API key".to_string());
+    }
 
     let content = SCShareableContent::get().map_err(|e| format!("获取共享内容失败: {e:?}"))?;
     let display = content

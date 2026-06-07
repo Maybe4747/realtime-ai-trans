@@ -2,12 +2,14 @@
 
 This template should help get you started developing with Tauri, React and Typescript in Vite.
 
-## Local API Keys
+## Local Config
 
-Realtime subtitles currently use two providers:
+Realtime subtitles store local settings in SQLite under the Tauri app data directory.
 
-- `GLM_API_KEY`: ASR, `glm-asr-2512`
-- `DEEPSEEK_API_KEY`: translation, `deepseek-v4-flash`
+Provider credentials are configured from the app console:
+
+- ASR provider + ASR API key
+- LLM translation provider + LLM translation API key
 
 ## Recommended IDE Setup
 

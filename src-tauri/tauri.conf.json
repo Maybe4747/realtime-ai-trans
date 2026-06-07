@@ -14,8 +14,10 @@
       {
         "label": "main",
         "title": "LUMEN · 控制台",
-        "width": 360,
-        "height": 600,
+        "width": 1040,
+        "height": 720,
+        "minWidth": 860,
+        "minHeight": 600,
         "resizable": true
       },
       {
