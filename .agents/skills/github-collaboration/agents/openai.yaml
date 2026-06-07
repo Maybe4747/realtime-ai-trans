@@ -1,4 +1,0 @@
-interface:
-  display_name: "GitHub Collaboration"
-  short_description: "Dev branch PR workflow with gh"
-  default_prompt: "Use $github-collaboration to manage dev-branch GitHub collaboration from commits through PR merge and rebase."
