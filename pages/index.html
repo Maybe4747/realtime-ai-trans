@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LUMEN - macOS 实时双语字幕</title>
+  <meta name="description" content="LUMEN 让 macOS 上任何正在播放的声音变成实时双语悬浮字幕，支持系统级音频识别、翻译、历史记录和字幕样式调节。" />
+  <style>
+    :root {
+      --bg: #f6f6f8;
+      --surface: #ffffff;
+      --surface-soft: #f1f2f4;
+      --text: #1d1d1f;
+      --muted: #6e6e73;
+      --faint: #a8a8ad;
+      --border: #e4e5e9;
+      --green: #07c160;
+      --green-deep: #087a3a;
+      --ink: #111113;
+      --radius: 16px;
+      --shadow: 0 24px 80px rgba(18, 21, 26, 0.10);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+        "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .page {
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    .shell {
+      width: min(1120px, calc(100vw - 40px));
+      margin: 0 auto;
+    }
+
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-bottom: 1px solid rgba(228, 229, 233, 0.76);
+      background: rgba(246, 246, 248, 0.82);
+      backdrop-filter: blur(18px);
+    }
+
+    .nav-inner {
+      display: flex;
+      height: 64px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 720;
+      letter-spacing: 0;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      border-radius: 10px;
+      background: linear-gradient(180deg, #202124, #111113);
+      color: #fff;
+      font-size: 15px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .nav-links a:hover {
+      color: var(--text);
+    }
+
+    .button {
+      display: inline-flex;
+      min-height: 40px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      padding: 0 16px;
+      background: var(--ink);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 650;
+      transition: transform 160ms ease, background 160ms ease;
+    }
+
+    .button:hover {
+      background: #000;
+      transform: translateY(-1px);
+    }
+
+    .button.secondary {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+    }
+
+    .hero {
+      display: grid;
+      min-height: calc(100vh - 64px);
+      grid-template-columns: minmax(0, 0.92fr) minmax(430px, 1.08fr);
+      gap: 44px;
+      align-items: center;
+      padding: 54px 0 42px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 18px;
+      color: var(--green-deep);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+
+    h1 {
+      max-width: 780px;
+      margin: 0;
+      color: var(--ink);
+      font-size: clamp(44px, 7vw, 76px);
+      line-height: 0.96;
+      letter-spacing: 0;
+    }
+
+    .hero-copy {
+      max-width: 560px;
+      margin: 22px 0 0;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.75;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 30px;
+    }
+
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 24px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .pill {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      padding: 7px 11px;
+    }
+
+    .product-stage {
+      position: relative;
+      min-height: 560px;
+    }
+
+    .window {
+      position: absolute;
+      inset: 22px 0 auto auto;
+      width: min(100%, 680px);
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .window-bar {
+      display: flex;
+      height: 48px;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      background: #fbfbfc;
+      padding: 0 16px;
+    }
+
+    .traffic {
+      display: flex;
+      gap: 7px;
+    }
+
+    .traffic span {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: #d7d7dc;
+    }
+
+    .window-title {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .console {
+      display: grid;
+      grid-template-columns: 172px 1fr;
+      min-height: 432px;
+    }
+
+    .sidebar {
+      border-right: 1px solid var(--border);
+      background: #fbfbfc;
+      padding: 18px 12px;
+    }
+
+    .side-item,
+    .side-child {
+      display: flex;
+      height: 36px;
+      align-items: center;
+      gap: 9px;
+      border-radius: 9px;
+      color: var(--muted);
+      font-size: 13px;
+      padding: 0 10px;
+    }
+
+    .side-item.active {
+      background: #e8f7ee;
+      color: var(--green-deep);
+      font-weight: 700;
+    }
+
+    .side-child {
+      height: 30px;
+      margin-left: 12px;
+      font-size: 12px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .main-panel {
+      padding: 22px;
+    }
+
+    .panel-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+
+    .panel-top h2 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    .status {
+      border-radius: 999px;
+      background: #e8f7ee;
+      color: var(--green-deep);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 7px 10px;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .metric {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      padding: 14px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 24px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .subtitle-preview {
+      margin-top: 12px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface-soft);
+      padding: 16px;
+    }
+
+    .subtitle-preview p {
+      margin: 0;
+      border-radius: 8px;
+      background: #fff;
+      color: var(--muted);
+      line-height: 1.55;
+      padding: 10px 12px;
+    }
+
+    .subtitle-preview p+p {
+      margin-top: 8px;
+      color: var(--text);
+      font-weight: 650;
+    }
+
+    .floating-subtitle {
+      position: absolute;
+      right: 44px;
+      bottom: 44px;
+      left: 58px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 9px;
+      text-align: center;
+    }
+
+    .floating-subtitle span {
+      border-radius: 0.38em;
+      background: rgba(255, 255, 255, 0.94);
+      box-decoration-break: clone;
+      -webkit-box-decoration-break: clone;
+      color: var(--ink);
+      line-height: 1.5;
+      padding: 0.14em 0.4em;
+      box-shadow: 0 10px 34px rgba(30, 35, 44, 0.10);
+    }
+
+    .floating-subtitle .en {
+      color: #3f4248;
+      font-size: 16px;
+    }
+
+    .floating-subtitle .zh {
+      font-size: 28px;
+      font-weight: 720;
+    }
+
+    section {
+      padding: 74px 0;
+    }
+
+    .section-head {
+      max-width: 700px;
+      margin-bottom: 26px;
+    }
+
+    .section-head h2 {
+      margin: 0;
+      color: var(--ink);
+      font-size: clamp(30px, 4vw, 44px);
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    .section-head p {
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.7;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+
+    .feature {
+      min-height: 190px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 20px;
+    }
+
+    .feature .icon {
+      display: grid;
+      width: 38px;
+      height: 38px;
+      place-items: center;
+      border-radius: 10px;
+      background: #e8f7ee;
+      color: var(--green-deep);
+      font-weight: 800;
+    }
+
+    .feature h3 {
+      margin: 18px 0 8px;
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+
+    .feature p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .step {
+      position: relative;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 18px;
+    }
+
+    .step b {
+      display: inline-flex;
+      width: 30px;
+      height: 30px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 9px;
+      background: var(--ink);
+      color: #fff;
+      font-size: 13px;
+    }
+
+    .step h3 {
+      margin: 18px 0 8px;
+      font-size: 17px;
+    }
+
+    .step p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .cta {
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      padding: 34px;
+    }
+
+    .cta-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .cta h2 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 42px);
+    }
+
+    .cta p {
+      max-width: 560px;
+      margin: 12px 0 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    footer {
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+      padding: 26px 0;
+    }
+
+    .footer-inner {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    @media (max-width: 920px) {
+      .nav-links a {
+        display: none;
+      }
+
+      .hero,
+      .console {
+        grid-template-columns: 1fr;
+      }
+
+      .hero {
+        min-height: auto;
+      }
+
+      .product-stage {
+        min-height: 520px;
+      }
+
+      .window {
+        inset: 0 auto auto 0;
+      }
+
+      .feature-grid,
+      .flow,
+      .metric-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        display: none;
+      }
+
+      .cta-inner {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .shell {
+        width: min(100vw - 28px, 1120px);
+      }
+
+      .hero {
+        gap: 26px;
+        padding-top: 34px;
+      }
+
+      .product-stage {
+        min-height: 460px;
+      }
+
+      .window {
+        border-radius: 18px;
+      }
+
+      .main-panel {
+        padding: 16px;
+      }
+
+      .floating-subtitle {
+        right: 16px;
+        bottom: 24px;
+        left: 16px;
+      }
+
+      .floating-subtitle .zh {
+        font-size: 22px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="page">
+    <nav class="nav">
+      <div class="shell nav-inner">
+        <a class="brand" href="#">
+          <span class="brand-mark">L</span>
+          <span>LUMEN</span>
+        </a>
+        <div class="nav-links">
+          <a href="#features">能力</a>
+          <a href="#workflow">流程</a>
+          <a href="#install">开始使用</a>
+          <a class="button" href="https://github.com/Maybe4747/realtime-ai-trans">GitHub</a>
+        </div>
+      </div>
+    </nav>
+
+    <main>
+      <div class="shell hero">
+        <div>
+          <p class="eyebrow">macOS/Window realtime bilingual subtitles</p>
+          <h1>让任何系统声音，变成实时双语字幕。</h1>
+          <p class="hero-copy">
+            LUMEN 采集 macOS/Window 系统音频，实时识别并翻译成可悬浮显示的双语字幕。
+            不挑播放器，不锁在某个网站，也不用安装虚拟声卡。
+          </p>
+          <div class="hero-actions">
+            <a class="button" href="https://github.com/Maybe4747/realtime-ai-trans">查看源码</a>
+            <a class="button secondary" href="#install">本地运行</a>
+          </div>
+          <div class="hero-meta">
+            <span class="pill">Tauri 2</span>
+            <span class="pill">ScreenCaptureKit</span>
+            <span class="pill">GLM-ASR</span>
+            <span class="pill">DeepSeek V4 Flash</span>
+          </div>
+        </div>
+
+        <div class="product-stage" aria-label="LUMEN product preview">
+          <div class="window">
+            <div class="window-bar">
+              <div class="traffic"><span></span><span></span><span></span></div>
+              <div class="window-title">LUMEN 控制台</div>
+              <div></div>
+            </div>
+            <div class="console">
+              <aside class="sidebar">
+                <div class="side-item active"><span class="dot"></span>首页</div>
+                <div class="side-item"><span class="dot"></span>历史</div>
+                <div class="side-item"><span class="dot"></span>工具</div>
+                <div class="side-child">文本翻译</div>
+                <div class="side-child">音频转文字</div>
+                <div class="side-item"><span class="dot"></span>设置</div>
+              </aside>
+              <div class="main-panel">
+                <div class="panel-top">
+                  <h2>实时同传</h2>
+                  <span class="status">采集中</span>
+                </div>
+                <div class="metric-grid">
+                  <div class="metric"><strong>2.4h</strong><span>累计使用</span></div>
+                  <div class="metric"><strong>18k</strong><span>翻译字数</span></div>
+                  <div class="metric"><strong>324</strong><span>字幕句数</span></div>
+                </div>
+                <div class="subtitle-preview">
+                  <p>We can ship the demo today if the latency stays under two seconds.</p>
+                  <p>延迟低于两秒，今天就能发 demo。</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="floating-subtitle">
+            <span class="en">The speaker is moving fast, but the subtitle stays readable.</span>
+            <span class="zh">语速再快，字幕也要清楚。</span>
+          </div>
+        </div>
+      </div>
+
+      <section id="features">
+        <div class="shell">
+          <div class="section-head">
+            <h2>系统级、实时、可读。</h2>
+            <p>
+              它不是网页插件，也不是录音整理工具。LUMEN 面向真实观看场景，把识别、翻译、
+              悬浮显示和历史回看收在一个轻量控制台里。
+            </p>
+          </div>
+          <div class="feature-grid">
+            <div class="feature">
+              <div class="icon">01</div>
+              <h3>系统音频采集</h3>
+              <p>基于 ScreenCaptureKit 获取 macOS 系统声音，适配会议、课程、视频和直播。</p>
+            </div>
+            <div class="feature">
+              <div class="icon">02</div>
+              <h3>低延迟同传</h3>
+              <p>VAD 切句后并发处理 ASR 与翻译，优先保证字幕跟得上内容节奏。</p>
+            </div>
+            <div class="feature">
+              <div class="icon">03</div>
+              <h3>字幕友好翻译</h3>
+              <p>提示词偏向短句、自然中文和术语保留，减少逐字翻译造成的阅读负担。</p>
+            </div>
+            <div class="feature">
+              <div class="icon">04</div>
+              <h3>可调字幕样式</h3>
+              <p>支持语言、字号、颜色、背景透明度和显示时长配置，更贴近音乐软件体验。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="workflow">
+        <div class="shell">
+          <div class="section-head">
+            <h2>从声音到字幕，只保留必要步骤。</h2>
+            <p>链路跑在本地桌面应用里，云端只负责识别和翻译请求，控制台负责配置、工具和历史。</p>
+          </div>
+          <div class="flow">
+            <div class="step">
+              <b>1</b>
+              <h3>采集系统声音</h3>
+              <p>任意 app 的播放声音进入本地音频处理链路。</p>
+            </div>
+            <div class="step">
+              <b>2</b>
+              <h3>VAD 切句</h3>
+              <p>按语音能量判断句尾，降低等待时间。</p>
+            </div>
+            <div class="step">
+              <b>3</b>
+              <h3>ASR 与翻译</h3>
+              <p>识别出文本后调用翻译模型，输出短而自然的字幕。</p>
+            </div>
+            <div class="step">
+              <b>4</b>
+              <h3>悬浮显示</h3>
+              <p>NSPanel 字幕层置顶显示，可穿透鼠标，不打断观看。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="install">
+        <div class="shell">
+          <div class="cta">
+            <div class="cta-inner">
+              <div>
+                <h2>现在开始本地运行。</h2>
+                <p>
+                  克隆仓库后运行 <strong>pnpm install</strong> 和 <strong>pnpm tauri:dev</strong>。
+                  首次启动时授予屏幕录制权限，并在设置里填入 ASR 与翻译服务密钥。
+                </p>
+              </div>
+              <a class="button" href="https://github.com/Maybe4747/realtime-ai-trans">打开 GitHub</a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="shell footer-inner">
+        <span>© 2026 Maybe4747 · MIT License</span>
+        <span>Built for macOS realtime subtitles</span>
+      </div>
+    </footer>
+  </div>
+</body>
+
+</html>
