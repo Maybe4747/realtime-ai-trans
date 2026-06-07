@@ -7,7 +7,7 @@
 [![Version](https://img.shields.io/github/package-json/v/Maybe4747/realtime-ai-trans?filename=package.json&label=version)](https://github.com/Maybe4747/realtime-ai-trans/releases)
 [![CI](https://github.com/Maybe4747/realtime-ai-trans/actions/workflows/release-windows.yml/badge.svg)](https://github.com/Maybe4747/realtime-ai-trans/actions/workflows/release-windows.yml)
 [![Install](https://img.shields.io/badge/install-release-blue?logo=github)](https://github.com/Maybe4747/realtime-ai-trans/releases/latest)
-[![Bilibili](https://img.shields.io/badge/Bilibili-video%20TBD-00A1D6?logo=bilibili&logoColor=white)](#)
+[![Bilibili](https://img.shields.io/badge/Bilibili-video%20TBD-00A1D6?logo=bilibili&logoColor=white)](https://demosssss.tos-cn-beijing.volces.com/QQ20260607-235525.mp4)
 
 > **电脑上播放的任何声音，即时变成母语悬浮字幕 —— 不挑 app、不挑网站。**
 
