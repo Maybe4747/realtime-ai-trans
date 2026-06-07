@@ -1,9 +1,56 @@
 export type LanguageCode = 'auto' | 'zh-CN' | 'en' | 'ja' | 'ko'
 export type TargetLanguageCode = Exclude<LanguageCode, 'auto'>
+export type SubtitlePosition = 'top' | 'bottom'
+
+export const ZHIPU_ASR_MODEL = 'glm-asr-2512'
+export const ZHIPU_TRANSLATION_MODEL = 'glm-4.7-flash'
 
 export interface TranslationConfig {
   sourceLanguage: LanguageCode
   targetLanguage: TargetLanguageCode
+}
+
+export const DEFAULT_TRANSLATION_CONFIG: TranslationConfig = {
+  sourceLanguage: 'auto',
+  targetLanguage: 'zh-CN'
+}
+
+export interface SubtitleDisplaySettings {
+  fontSize: number
+  opacity: number
+  position: SubtitlePosition
+  showSource: boolean
+  highlightRevisions: boolean
+}
+
+export const DEFAULT_SUBTITLE_SETTINGS: SubtitleDisplaySettings = {
+  fontSize: 26,
+  opacity: 76,
+  position: 'bottom',
+  showSource: true,
+  highlightRevisions: true
+}
+
+export type ApiKeySource = 'environment' | 'local' | 'none'
+
+export interface ProviderSettingsSummary {
+  apiKeyConfigured: boolean
+  apiKeySource: ApiKeySource
+  environmentApiKeyConfigured: boolean
+  localApiKeyConfigured: boolean
+}
+
+export interface AppSettings {
+  provider: ProviderSettingsSummary
+  translation: TranslationConfig
+  subtitles: SubtitleDisplaySettings
+}
+
+export interface SaveAppSettingsInput {
+  zhipuApiKey?: string
+  clearLocalApiKey?: boolean
+  translation: TranslationConfig
+  subtitles: SubtitleDisplaySettings
 }
 
 export interface StartSessionOptions extends TranslationConfig {
@@ -67,6 +114,7 @@ export interface AudioChunk {
 export interface AppSnapshot {
   session: SessionState
   subtitles: SubtitleItem[]
+  settings: AppSettings
 }
 
 export interface OverlayBounds {
@@ -86,6 +134,11 @@ export type SessionEvent =
       state: SessionState
       message: string
     }
+
+export interface SettingsEvent {
+  type: 'settings:changed'
+  settings: AppSettings
+}
 
 export interface ProviderRevision {
   targetSubtitleId: string
@@ -120,6 +173,8 @@ export type Unsubscribe = () => void
 
 export interface AppApi {
   getSnapshot(): Promise<AppSnapshot>
+  getSettings(): Promise<AppSettings>
+  saveSettings(input: SaveAppSettingsInput): Promise<AppSettings>
   startSession(options: StartSessionOptions): Promise<SessionState>
   pauseSession(): Promise<SessionState>
   stopSession(): Promise<SessionState>
@@ -128,6 +183,7 @@ export interface AppApi {
   hideOverlay(): Promise<void>
   setOverlayBounds(bounds: OverlayBounds): Promise<void>
   clearHistory(): Promise<void>
+  onSettingsEvent(callback: (event: SettingsEvent) => void): Unsubscribe
   onSessionEvent(callback: (event: SessionEvent) => void): Unsubscribe
   onSubtitleEvent(callback: (event: SubtitleEvent) => void): Unsubscribe
 }

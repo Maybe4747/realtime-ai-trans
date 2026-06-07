@@ -8,6 +8,11 @@ import type {
 const REVISION_MAX_ITEMS = 3
 const REVISION_MAX_AGE_MS = 15_000
 
+interface SubtitleStorage {
+  saveSubtitle(item: SubtitleItem): Promise<void>
+  clearSubtitles(sessionId?: string): Promise<void>
+}
+
 interface SubtitleInput {
   id: string
   sessionId: string
@@ -18,16 +23,27 @@ interface SubtitleInput {
 }
 
 export class SubtitleStore {
-  private items: SubtitleItem[] = []
+  private items: SubtitleItem[]
   private listeners = new Set<(event: SubtitleEvent) => void>()
+
+  constructor(
+    private readonly storage?: SubtitleStorage,
+    initialItems: SubtitleItem[] = []
+  ) {
+    this.items = initialItems
+  }
 
   getSnapshot(): SubtitleItem[] {
     return [...this.items]
   }
 
-  getRecentStable(limit = REVISION_MAX_ITEMS): SubtitleItem[] {
+  getRecentStable(limit = REVISION_MAX_ITEMS, sessionId?: string): SubtitleItem[] {
     return this.items
-      .filter((item) => item.status === 'stable' || item.status === 'revised')
+      .filter(
+        (item) =>
+          (item.status === 'stable' || item.status === 'revised') &&
+          (!sessionId || item.sessionId === sessionId)
+      )
       .slice(-limit)
   }
 
@@ -38,6 +54,7 @@ export class SubtitleStore {
 
   clear(sessionId?: string): void {
     this.items = sessionId ? this.items.filter((item) => item.sessionId !== sessionId) : []
+    void this.storage?.clearSubtitles(sessionId).catch(reportStorageError)
     this.emit({ type: 'subtitle:clear', sessionId })
   }
 
@@ -59,11 +76,13 @@ export class SubtitleStore {
 
     if (existing) {
       Object.assign(existing, item)
+      this.persist(existing)
       this.emit({ type: 'subtitle:draft', item: existing })
       return existing
     }
 
     this.items.push(item)
+    this.persist(item)
     this.emit({ type: 'subtitle:draft', item })
     return item
   }
@@ -87,11 +106,13 @@ export class SubtitleStore {
 
     if (existing) {
       Object.assign(existing, item)
+      this.persist(existing)
       this.emit({ type: 'subtitle:stable', item: existing })
       return existing
     }
 
     this.items.push(item)
+    this.persist(item)
     this.emit({ type: 'subtitle:stable', item })
     return item
   }
@@ -107,8 +128,13 @@ export class SubtitleStore {
     item.status = 'revised'
     item.updatedAt = Date.now()
     item.revisionCount += 1
+    this.persist(item)
     this.emit({ type: 'subtitle:revised', item, previousText })
     return item
+  }
+
+  private persist(item: SubtitleItem): void {
+    void this.storage?.saveSubtitle(item).catch(reportStorageError)
   }
 
   private canRevise(item: SubtitleItem, translatedText: string): boolean {
@@ -126,4 +152,8 @@ export class SubtitleStore {
       listener(event)
     }
   }
+}
+
+function reportStorageError(error: unknown): void {
+  console.error('SQLite subtitle persistence failed', error)
 }
