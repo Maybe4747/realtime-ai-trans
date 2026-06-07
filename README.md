@@ -1,16 +1,123 @@
-# Tauri + React + Typescript
+# LUMEN · 桌面 AI 同声传译
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+> **电脑上播放的任何声音，即时变成母语悬浮字幕 —— 不挑 app、不挑网站。**
 
-## Local Config
+系统级音频采集 + AI 实时转写翻译 + 悬浮窗双语显示。看视频、上网课、听播客，字幕始终浮在最前，鼠标穿透不挡操作。
 
-Realtime subtitles store local settings in SQLite under the Tauri app data directory.
+**支持 macOS 和 Windows。**
 
-Provider credentials are configured from the app console:
+---
 
-- ASR provider + ASR API key
-- LLM translation provider + LLM translation API key
+## 为什么选 LUMEN
 
-## Recommended IDE Setup
+| 现有方案 | 短板 | LUMEN |
+|---|---|---|
+| YouTube 自带字幕 | 锁定单一平台，翻译质量随缘 | **系统级，任何来源** |
+| 系统自带实时字幕 | 只转写，不翻译 | **实时中英翻译** |
+| 浏览器翻译插件 | 偏网页文本，视频实时弱 | **音频流实时转写 + 翻译** |
+| Otter / Whisper 类工具 | 偏录音转写，非实时悬浮 | **实时悬浮，即开即用** |
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+一屏做到「**系统级 + 实时 + 翻译 + 悬浮字幕**」四件事。
+
+---
+
+## 功能亮点
+
+### ⚡ 极致轻快
+
+基于 **Tauri 2** 构建，Rust 后端 + React 前端。安装包不到 **10MB**，冷启动秒开，内存占用远低于 Electron 同类应用。系统音频采集、VAD 切句、API 调用全在 Rust 侧高性能完成，翻译时 CPU 几乎不动。
+
+### 🎯 精准翻译，术语不翻车
+
+大多数翻译软件看到技术术语就瞎翻 —— `Bun` 运行时被译成"面包"，`Deno` 变成"德诺"。LUMEN 通过**精心调校的 System Prompt** 强制保留专有名词、产品名、库名、技术术语为原文，同时携带**滚动上下文**（最近 2~3 句原文+译文对），让模型理解当前在聊技术时自动保持术语一致。不靠术语表也能准，有术语表更准。
+
+```
+输入：Testing Bun's new bundler against esbuild, results are surprising.
+普通翻译：测试面包的新面包师与 esbuild，结果出人意料。
+LUMEN：   测试 Bun 的新打包器与 esbuild 对比，结果出人意料。
+```
+
+### ⏱️ 真人同传级体验
+
+一句说完，下句开始时上句翻译就到。这是因为**本地 VAD 按自然停顿切句**，ASR 取整句后立即触发 LLM 流式翻译，翻译结果流式渲染到屏幕。不是逐词抖动，不是等 5 秒出一大段 —— 而是完整句子延迟约 **1~2 秒** 沉稳出现，跟真人同传的节奏一致。
+
+```
+[第1句说完] ─────第2句播放中─────→
+  "Welcome to the talk"    [翻译] 欢迎来到本次演讲 ✓ （同步显示在屏幕上）
+```
+
+### 🌐 多语种支持
+
+不只是英译中。支持**自动检测**源语言，译文可切换为简体中文、繁体中文、日文、韩文、西班牙文、法文、德文。看日文生肉、韩文发布会、英文技术演讲，一块搞定的方案。
+
+### 📁 音视频文件导入翻译
+
+除了实时系统音频，还支持**拖入音视频文件**直接转写 + 翻译。下载好的讲座、没字幕的电影、会议录音，丢进去即可得到双语文本，并可**导出 SRT 字幕**（开发中）。覆盖了实时 + 离线两种场景。
+
+### 🖱️ 全屏不挡，悬浮无感
+
+字幕条悬浮在所有窗口最上层，默认鼠标穿透，点击直达下方视频。透明背景 + 可调字号/颜色/透明度，看视频不影响操作。支持两种显示模式：
+- **双语** — 上行原文（浅色）+ 下行译文（高亮大字），适合学习
+- **仅译文** — 干净字幕，适合纯看片
+
+---
+
+## 怎么做到的
+
+```
+系统音频采集 → 本地 VAD 切句 → ASR 流式转写 → LLM 流式翻译 → 透明悬浮窗
+```
+
+1. **系统音频采集** — macOS ScreenCaptureKit / Windows WASAPI loopback，不装虚拟声卡，一次授权永久使用
+2. **本地 VAD 切句门控** — 基于能量检测按自然停顿切句，静音/杂音/纯音乐不上传，省延迟、省 API 费用
+3. **ASR 流式转写** — GLM-ASR-2512 实时识别，`stream=true` 增量回显
+4. **LLM 流式翻译** — DeepSeek v4 Flash 整句触发翻译，带上下文，流式渲染结果
+5. **悬浮窗渲染** — 独立 Webview 窗口，NSPanel（macOS）/ Win32 透明窗口（Windows），置顶 + 穿透
+
+---
+
+## 快速开始
+
+**前提：** Node 20+、Rust 最新 stable、pnpm
+
+```bash
+pnpm install
+pnpm tauri dev
+```
+
+首次启动会引导授权（macOS 屏幕录制 / Windows 自动采集），在主控台填入 API key → 点击"开始" → 播放任意视频，悬浮字幕即出现。
+
+API key 存储在系统密钥链（macOS Keychain / Windows DPAPI），不经过前端，不上传第三方。
+
+---
+
+## 技术栈
+
+| 层 | 技术 |
+|---|---|
+| 桌面框架 | Tauri 2 |
+| 前端 | React 19, Vite, Tailwind 4, shadcn/ui |
+| 音频采集 | macOS: ScreenCaptureKit / Windows: WASAPI loopback |
+| VAD 切句 | 本地能量 VAD（20ms 帧, 360ms 静音断句） |
+| ASR 转写 | 智谱 GLM-ASR-2512（流式 HTTP） |
+| 翻译 LLM | DeepSeek v4 Flash（免费，OpenAI 兼容协议） |
+| 悬浮窗 | macOS: NSPanel / Windows: Win32 透明窗口 |
+| 密钥存储 | Keychain / DPAPI |
+| 本地存储 | SQLite（设置 + 翻译历史） |
+
+---
+
+## 项目结构
+
+```
+src-tauri/     # Rust 后端：音频采集、VAD、ASR、翻译、密钥存储、SQLite
+src/           # React 前端：主控台、设置、历史记录、工具面板
+public/        # 独立字幕悬浮窗 (HTML + CSS + JS)
+docs/          # 设计文档与 API 参考
+```
+
+---
+
+## License
+
+MIT © 2026 Maybe4747
