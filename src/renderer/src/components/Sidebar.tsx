@@ -1,11 +1,8 @@
-import type { ApiKeySource } from '../../../shared/types'
-import { providerDetailText, providerStateText } from '../lib/labels'
 import { HomeIcon, SettingsIcon } from './icons'
 
 interface SidebarProps {
   activeView: 'home' | 'settings'
   apiKeyConfigured: boolean
-  apiKeySource: ApiKeySource
   recentCount: number
   onViewChange: (view: 'home' | 'settings') => void
 }
@@ -13,7 +10,6 @@ interface SidebarProps {
 export function Sidebar({
   activeView,
   apiKeyConfigured,
-  apiKeySource,
   recentCount,
   onViewChange
 }: SidebarProps): React.JSX.Element {
@@ -49,19 +45,9 @@ export function Sidebar({
             <SettingsIcon />
           </span>
           <span className="nav-label">设置</span>
-          <span className="nav-meta">{apiKeyConfigured ? 'ok' : '!'}</span>
+          <span className="nav-meta">{apiKeyConfigured ? '已设' : '未设'}</span>
         </button>
       </nav>
-
-      <div className="side-status">
-        <div className="connection-card">
-          <span className={`state-light ${apiKeySource}`} />
-          <div>
-            <strong>{providerStateText[apiKeySource]}</strong>
-            <span>{providerDetailText[apiKeySource]}</span>
-          </div>
-        </div>
-      </div>
     </aside>
   )
 }
