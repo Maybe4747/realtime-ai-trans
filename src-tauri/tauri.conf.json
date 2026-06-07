@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "demo",
+  "productName": "Lumen",
   "version": "0.1.0",
   "identifier": "com.maybe4747.com",
   "build": {
