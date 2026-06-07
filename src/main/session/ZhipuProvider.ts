@@ -38,6 +38,7 @@ const languageLabels: Record<LanguageCode, string> = {
 
 export class ZhipuProvider {
   private readonly eventListeners = new Set<(event: ProviderEvent) => void>()
+  private readonly errorListeners = new Set<(error: unknown) => void>()
   private readonly apiKey: string
   private readonly sessionId: string
   private readonly config: StartSessionOptions
@@ -87,6 +88,11 @@ export class ZhipuProvider {
     return () => this.eventListeners.delete(callback)
   }
 
+  onError(callback: (error: unknown) => void): () => void {
+    this.errorListeners.add(callback)
+    return () => this.errorListeners.delete(callback)
+  }
+
   private queueFlush(): void {
     const buffers = this.buffers
     this.buffers = []
@@ -96,7 +102,9 @@ export class ZhipuProvider {
       return
     }
 
-    this.flushing = this.flushing.then(() => this.flushSegment(buffers))
+    this.flushing = this.flushing
+      .then(() => this.flushSegment(buffers))
+      .catch((error: unknown) => this.emitError(error))
   }
 
   private async flushSegment(buffers: Buffer[]): Promise<void> {
@@ -204,6 +212,12 @@ export class ZhipuProvider {
   private emit(event: ProviderEvent): void {
     for (const listener of this.eventListeners) {
       listener(event)
+    }
+  }
+
+  private emitError(error: unknown): void {
+    for (const listener of this.errorListeners) {
+      listener(error)
     }
   }
 }
