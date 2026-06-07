@@ -3,7 +3,7 @@ import { HistoryList } from '../components/HistoryList'
 import { StatusRow } from '../components/StatusRow'
 import { StopIcon } from '../components/icons'
 import { formatDuration } from '../lib/format'
-import { positionText, providerStateText, statusText, subtitleStatusText } from '../lib/labels'
+import { positionText, statusText, subtitleStatusText } from '../lib/labels'
 
 interface HomeViewProps {
   canStart: boolean
@@ -15,7 +15,6 @@ interface HomeViewProps {
   localError: string
   overlayVisible: boolean
   recentSubtitles: SubtitleItem[]
-  revisionCount: number
   session: SessionState
   sessionDurationMs: number
   settings: AppSettings
@@ -42,7 +41,6 @@ export function HomeView({
   onToggleOverlay,
   overlayVisible,
   recentSubtitles,
-  revisionCount,
   session,
   sessionDurationMs,
   settings,
@@ -53,7 +51,7 @@ export function HomeView({
       <header className="page-header">
         <div className="page-title">
           <h2>主页</h2>
-          <p>查看最近字幕、修正情况和本机使用概览。</p>
+          <p>查看最近字幕和当前听译状态。</p>
         </div>
         <div className="header-actions">
           {isListening ? (
@@ -80,17 +78,7 @@ export function HomeView({
         <article className="stat-card">
           <span className="label">今日字幕</span>
           <strong className="value">{subtitlesToday}</strong>
-          <span className="caption">SQLite 历史记录</span>
-        </article>
-        <article className="stat-card">
-          <span className="label">自动修正</span>
-          <strong className="value">{revisionCount}</strong>
-          <span className="caption">revised 字幕</span>
-        </article>
-        <article className="stat-card">
-          <span className="label">平均延迟</span>
-          <strong className="value">--</strong>
-          <span className="caption">等待真实会话数据</span>
+          <span className="caption">已生成字幕</span>
         </article>
       </section>
 
@@ -117,24 +105,18 @@ export function HomeView({
 
         <section className="content-group">
           <div className="group-header">
-            <h3>状态</h3>
-            <span>本机</span>
+            <h3>听译状态</h3>
           </div>
           <div className="insight-stack">
             <StatusRow
-              label="API Key"
-              text={providerStateText[settings.provider.apiKeySource]}
-              value={settings.provider.apiKeyConfigured ? '可用' : '未配置'}
-            />
-            <StatusRow
               label="当前字幕"
-              text={latestSubtitle?.translatedText || '等待真实音频输入'}
-              value={subtitleStatusText[latestSubtitle?.status ?? 'draft']}
+              text={latestSubtitle?.translatedText || '等待音频输入'}
+              value={latestSubtitle ? subtitleStatusText[latestSubtitle.status] : '等待中'}
             />
             <StatusRow
-              label="麦克风"
-              text={isCapturing ? '正在采集 PCM16 音频' : '未采集'}
-              value={isCapturing ? '运行中' : '空闲'}
+              label="收音状态"
+              text={isCapturing ? '正在接收音频' : '未开始收音'}
+              value={isCapturing ? '进行中' : '空闲'}
             />
             <StatusRow
               label="字幕窗口"

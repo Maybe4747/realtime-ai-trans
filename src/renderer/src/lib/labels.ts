@@ -29,21 +29,15 @@ export const subtitleStatusText: Record<SubtitleStatus, string> = {
 }
 
 export const providerStateText: Record<ApiKeySource, string> = {
-  environment: '环境变量',
-  local: '本机密钥',
-  none: '等待 API Key'
-}
-
-export const providerDetailText: Record<ApiKeySource, string> = {
-  environment: 'ZHIPU_API_KEY',
-  local: 'SQLite 已保存',
-  none: '设置后开始听译'
+  environment: '已配置',
+  local: '已配置',
+  none: '未配置'
 }
 
 export const apiKeySourceDescription: Record<ApiKeySource, string> = {
-  environment: '当前使用 ZHIPU_API_KEY 环境变量。',
-  local: '当前使用本机 SQLite 中保存的密钥。',
-  none: '保存后由主进程读取。'
+  environment: '已检测到可用访问密钥。',
+  local: '已保存可用访问密钥。',
+  none: '保存后即可开始听译。'
 }
 
 export const positionText: Record<SubtitlePosition, string> = {

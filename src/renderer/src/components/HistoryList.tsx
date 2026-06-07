@@ -18,7 +18,7 @@ export function HistoryList({
       <div className="empty-history">
         <div className="empty-symbol" aria-hidden="true" />
         <strong>暂无字幕记录</strong>
-        <p>开始听译后，最新字幕和上下文修正会按时间顺序显示在这里。</p>
+        <p>开始听译后，最新字幕会按时间顺序显示在这里。</p>
       </div>
     )
   }

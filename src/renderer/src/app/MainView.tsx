@@ -66,9 +66,6 @@ export function MainView({
     today.setHours(0, 0, 0, 0)
     return subtitles.filter((item) => item.updatedAt >= today.getTime())
   }, [clockNow, subtitles])
-  const revisionCount = subtitles.filter(
-    (item) => item.status === 'revised' || item.revisionCount > 0
-  ).length
   const sessionDurationMs =
     session.startedAt && (session.status === 'listening' || session.status === 'paused')
       ? Math.max(0, clockNow - session.startedAt)
@@ -174,7 +171,6 @@ export function MainView({
       <Sidebar
         activeView={activeView}
         apiKeyConfigured={settings.provider.apiKeyConfigured}
-        apiKeySource={settings.provider.apiKeySource}
         recentCount={recentSubtitles.length}
         onViewChange={setActiveView}
       />
@@ -191,7 +187,6 @@ export function MainView({
             localError={localError}
             overlayVisible={overlayVisible}
             recentSubtitles={recentSubtitles}
-            revisionCount={revisionCount}
             session={session}
             sessionDurationMs={sessionDurationMs}
             settings={settings}

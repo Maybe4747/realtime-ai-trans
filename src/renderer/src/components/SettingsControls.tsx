@@ -1,21 +1,3 @@
-interface ReadOnlyRowProps {
-  label: string
-  value: string
-}
-
-export function ReadOnlyRow({ label, value }: ReadOnlyRowProps): React.JSX.Element {
-  return (
-    <div className="setting-row">
-      <div className="setting-label">
-        <strong>{label}</strong>
-      </div>
-      <div className="control">
-        <input className="field short" readOnly value={value} />
-      </div>
-    </div>
-  )
-}
-
 interface RangeRowProps {
   label: string
   max: number

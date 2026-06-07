@@ -202,56 +202,6 @@ select:disabled {
   font-weight: 590;
 }
 
-.side-status {
-  margin-top: auto;
-  padding: 16px 18px 18px;
-}
-
-.connection-card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
-  align-items: center;
-  min-height: 54px;
-  padding: 10px;
-  border: 1px solid var(--separator-soft);
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.58);
-}
-
-.state-light {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--orange);
-  box-shadow: 0 0 0 4px rgba(196, 106, 22, 0.12);
-}
-
-.state-light.environment,
-.state-light.local {
-  background: var(--green);
-  box-shadow: 0 0 0 4px rgba(36, 138, 61, 0.12);
-}
-
-.connection-card strong,
-.connection-card span {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.connection-card strong {
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.connection-card span {
-  margin-top: 2px;
-  color: var(--secondary);
-  font-size: 11px;
-}
-
 .content {
   min-width: 0;
   overflow: auto;
@@ -336,7 +286,7 @@ select:disabled {
 
 .overview-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -904,8 +854,7 @@ select:disabled {
 
   .brand,
   .nav-label,
-  .nav-meta,
-  .side-status {
+  .nav-meta {
     display: none;
   }
 

@@ -5,8 +5,7 @@ import type {
   TargetLanguageCode,
   TranslationConfig
 } from '../../../shared/types'
-import { ZHIPU_ASR_MODEL, ZHIPU_TRANSLATION_MODEL } from '../../../shared/types'
-import { RangeRow, ReadOnlyRow, SwitchRow } from '../components/SettingsControls'
+import { RangeRow, SwitchRow } from '../components/SettingsControls'
 import { sourceLanguageOptions, targetLanguageOptions } from '../lib/constants'
 import {
   apiKeySourceDescription,
@@ -51,7 +50,7 @@ export function SettingsView({
       <header className="page-header">
         <div className="page-title">
           <h2>设置</h2>
-          <p>管理智谱连接、语言和字幕窗口偏好。</p>
+          <p>管理听译连接、语言和字幕窗口偏好。</p>
         </div>
         <div className="header-actions">
           <button className="text-button secondary" disabled={isSaving} onClick={onReset}>
@@ -65,17 +64,17 @@ export function SettingsView({
 
       <div className="settings-stack">
         <section>
-          <h3 className="settings-section-title">智谱</h3>
+          <h3 className="settings-section-title">连接</h3>
           <div className="settings-group">
             <div className="setting-row">
               <div className="setting-label">
-                <strong>API Key</strong>
+                <strong>访问密钥</strong>
                 <span>{apiKeySourceDescription[settings.provider.apiKeySource]}</span>
               </div>
               <div className="control">
                 <input
                   className="field"
-                  placeholder="ZHIPU_API_KEY"
+                  placeholder="粘贴访问密钥"
                   type="password"
                   value={apiKeyInput}
                   onChange={(event) => onApiKeyInputChange(event.target.value)}
@@ -85,13 +84,11 @@ export function SettingsView({
                 </span>
               </div>
             </div>
-            <ReadOnlyRow label="语音识别" value={ZHIPU_ASR_MODEL} />
-            <ReadOnlyRow label="翻译与修正" value={ZHIPU_TRANSLATION_MODEL} />
             {settings.provider.localApiKeyConfigured && (
               <div className="setting-row compact">
                 <div className="setting-label">
-                  <strong>本机密钥</strong>
-                  <span>已保存在 SQLite。</span>
+                  <strong>已保存的密钥</strong>
+                  <span>移除后需要重新填写。</span>
                 </div>
                 <div className="control">
                   <button
