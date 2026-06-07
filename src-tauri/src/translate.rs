@@ -1,4 +1,4 @@
-// Phase 2 · GLM-4.7-Flash 流式翻译客户端
+// Phase 2 · DeepSeek v4 flash 流式翻译客户端
 // 整句英文 final → chat/completions(stream)→ 流式中文 → emit translating/done。
 // 准确率(design §5.4):system 规则保留专有名词 + 最近几句(原文,译文)滚动上下文。
 
@@ -8,7 +8,7 @@ use tauri::AppHandle;
 
 use crate::asr::emit_subtitle;
 
-const CHAT_URL: &str = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
+const CHAT_URL: &str = "https://api.deepseek.com/chat/completions";
 
 const SYS: &str = "你是实时字幕的同声传译。把英文口语逐句翻成自然、简洁的简体中文。\
 保留专有名词、产品名、库名、框架名、技术术语、代码标识符为英文原文,不要硬译\
@@ -33,9 +33,11 @@ pub async fn translate(
     messages.push(json!({"role": "user", "content": en}));
 
     let body = json!({
-        "model": "glm-4.7-flash",
+        "model": "deepseek-v4-flash",
         "stream": true,
-        "temperature": 0.3,
+        "thinking": { "type": "disabled" },
+        "temperature": 0.1,
+        "max_tokens": 256,
         "messages": messages,
     });
 

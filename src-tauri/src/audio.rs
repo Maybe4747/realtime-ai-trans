@@ -18,9 +18,9 @@ const DECIM: usize = SRC_RATE / DST_RATE; // 3:1 整除
 // VAD 参数(在 16k 上)
 const FRAME: usize = 320; // 20ms
 const SILENCE_RMS: f32 = 0.008; // 能量阈值,低于视为静音
-const SILENCE_HANG: usize = 30; // 连续 30 帧(600ms)静音 → 收段
+const SILENCE_HANG: usize = 18; // 连续 18 帧(360ms)静音 → 收段
 const MIN_SEG: usize = DST_RATE * 3 / 10; // 最短 300ms,过短丢弃(噪声)
-const MAX_SEG: usize = DST_RATE * 25; // 最长 25s,兜底 30s 限制
+const MAX_SEG: usize = DST_RATE * 8; // 最长 8s,兜底拆长句降低端到端延迟
 
 struct Vad {
     seg: Vec<f32>,     // 当前累积段(16k)
@@ -116,15 +116,17 @@ impl SCStreamOutputTrait for Capture {
 
 static STREAM: Mutex<Option<SCStream>> = Mutex::new(None);
 
-/// 开始同传:采集→VAD→ASR。需 GLM_API_KEY 环境变量与屏幕录制权限。
+/// 开始同传:采集→VAD→ASR→翻译。需 GLM_API_KEY、DEEPSEEK_API_KEY 与屏幕录制权限。
 #[tauri::command]
 pub fn start_capture(app: AppHandle) -> Result<(), String> {
     let mut guard = STREAM.lock().unwrap();
     if guard.is_some() {
         return Err("已在运行".into());
     }
-    let key = std::env::var("GLM_API_KEY")
+    let asr_key = std::env::var("GLM_API_KEY")
         .map_err(|_| "未设置 GLM_API_KEY 环境变量".to_string())?;
+    let translate_key = std::env::var("DEEPSEEK_API_KEY")
+        .map_err(|_| "未设置 DEEPSEEK_API_KEY 环境变量".to_string())?;
 
     let content = SCShareableContent::get().map_err(|e| format!("获取共享内容失败: {e:?}"))?;
     let display = content
@@ -146,10 +148,11 @@ pub fn start_capture(app: AppHandle) -> Result<(), String> {
 
     let (tx, rx) = channel::<Vec<f32>>();
 
-    // 处理线程:tokio 运行时,消费切好的段 → 调 GLM-ASR。
+    // 处理线程:消费切好的段 → 调 ASR;翻译旁路并发,避免堵塞下一段 ASR。
     let app2 = app.clone();
     std::thread::spawn(move || {
-        let rt = match tokio::runtime::Builder::new_current_thread()
+        let rt = match tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
             .enable_all()
             .build()
         {
@@ -162,18 +165,27 @@ pub fn start_capture(app: AppHandle) -> Result<(), String> {
         let client = reqwest::Client::new();
         rt.block_on(async move {
             // 最近几句(原文, 译文)做翻译上下文,术语/语境连贯。
-            let mut ctx: Vec<(String, String)> = Vec::new();
+            let ctx: Arc<Mutex<Vec<(String, String)>>> = Arc::new(Mutex::new(Vec::new()));
             while let Ok(seg) = rx.recv() {
-                if let Some((id, en)) = asr::transcribe(&app2, &client, &key, seg).await {
-                    if let Some(zh) =
-                        translate::translate(&app2, &client, &key, id, &en, &ctx).await
-                    {
-                        ctx.push((en, zh));
-                        let len = ctx.len();
-                        if len > 3 {
-                            ctx.drain(..len - 3);
+                if let Some((id, en)) = asr::transcribe(&app2, &client, &asr_key, seg).await {
+                    let app3 = app2.clone();
+                    let client3 = client.clone();
+                    let key3 = translate_key.clone();
+                    let ctx3 = ctx.clone();
+                    let ctx_snapshot = ctx.lock().unwrap().clone();
+                    tokio::spawn(async move {
+                        if let Some(zh) =
+                            translate::translate(&app3, &client3, &key3, id, &en, &ctx_snapshot)
+                                .await
+                        {
+                            let mut ctx = ctx3.lock().unwrap();
+                            ctx.push((en, zh));
+                            let len = ctx.len();
+                            if len > 3 {
+                                ctx.drain(..len - 3);
+                            }
                         }
-                    }
+                    });
                 }
             }
         });
