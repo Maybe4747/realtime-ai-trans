@@ -1,5 +1,10 @@
 # LUMEN · 桌面 AI 同声传译
 
+[![Version](https://img.shields.io/github/package-json/v/Maybe4747/realtime-ai-trans?filename=package.json&label=version)](https://github.com/Maybe4747/realtime-ai-trans/releases)
+[![CI](https://github.com/Maybe4747/realtime-ai-trans/actions/workflows/release-windows.yml/badge.svg)](https://github.com/Maybe4747/realtime-ai-trans/actions/workflows/release-windows.yml)
+[![Install](https://img.shields.io/badge/install-release-blue?logo=github)](https://github.com/Maybe4747/realtime-ai-trans/releases/latest)
+[![Bilibili](https://img.shields.io/badge/Bilibili-video%20TBD-00A1D6?logo=bilibili&logoColor=white)](#)
+
 > **电脑上播放的任何声音，即时变成母语悬浮字幕 —— 不挑 app、不挑网站。**
 
 系统级音频采集 + AI 实时转写翻译 + 悬浮窗双语显示。看视频、上网课、听播客，字幕始终浮在最前，鼠标穿透不挡操作。
@@ -10,12 +15,12 @@
 
 ## 为什么选 LUMEN
 
-| 现有方案 | 短板 | LUMEN |
-|---|---|---|
-| YouTube 自带字幕 | 锁定单一平台，翻译质量随缘 | **系统级，任何来源** |
-| 系统自带实时字幕 | 只转写，不翻译 | **实时中英翻译** |
-| 浏览器翻译插件 | 偏网页文本，视频实时弱 | **音频流实时转写 + 翻译** |
-| Otter / Whisper 类工具 | 偏录音转写，非实时悬浮 | **实时悬浮，即开即用** |
+| 现有方案               | 短板                       | LUMEN                     |
+| ---------------------- | -------------------------- | ------------------------- |
+| YouTube 自带字幕       | 锁定单一平台，翻译质量随缘 | **系统级，任何来源**      |
+| 系统自带实时字幕       | 只转写，不翻译             | **实时中英翻译**          |
+| 浏览器翻译插件         | 偏网页文本，视频实时弱     | **音频流实时转写 + 翻译** |
+| Otter / Whisper 类工具 | 偏录音转写，非实时悬浮     | **实时悬浮，即开即用**    |
 
 一屏做到「**系统级 + 实时 + 翻译 + 悬浮字幕**」四件事。
 
@@ -25,7 +30,7 @@
 
 ### ⚡ 极致轻快
 
-基于 **Tauri 2** 构建，Rust 后端 + React 前端。安装包不到 **10MB**，冷启动秒开，内存占用远低于 Electron 同类应用。系统音频采集、VAD 切句、API 调用全在 Rust 侧高性能完成，翻译时 CPU 几乎不动。
+基于 **Tauri 2** 构建，Rust 后端 + React 前端。安装包仅 **4.7MB**，冷启动秒开，内存占用远低于 Electron 同类应用。系统音频采集、VAD 切句、API 调用全在 Rust 侧高性能完成，翻译时 CPU 几乎不动。
 
 ### 🎯 精准翻译，术语不翻车
 
@@ -57,6 +62,7 @@ LUMEN：   测试 Bun 的新打包器与 esbuild 对比，结果出人意料。
 ### 🖱️ 全屏不挡，悬浮无感
 
 字幕条悬浮在所有窗口最上层，默认鼠标穿透，点击直达下方视频。透明背景 + 可调字号/颜色/透明度，看视频不影响操作。支持两种显示模式：
+
 - **双语** — 上行原文（浅色）+ 下行译文（高亮大字），适合学习
 - **仅译文** — 干净字幕，适合纯看片
 
@@ -78,6 +84,13 @@ LUMEN：   测试 Bun 的新打包器与 esbuild 对比，结果出人意料。
 
 ## 快速开始
 
+### 安装下载
+
+windows ： https://github.com/Maybe4747/realtime-ai-trans/releases/
+macos ：（待解决签名认证问题）
+
+### 本地开发
+
 **前提：** Node 20+、Rust 最新 stable、pnpm
 
 ```bash
@@ -93,17 +106,17 @@ API key 存储在系统密钥链（macOS Keychain / Windows DPAPI），不经过
 
 ## 技术栈
 
-| 层 | 技术 |
-|---|---|
-| 桌面框架 | Tauri 2 |
-| 前端 | React 19, Vite, Tailwind 4, shadcn/ui |
+| 层       | 技术                                               |
+| -------- | -------------------------------------------------- |
+| 桌面框架 | Tauri 2                                            |
+| 前端     | React 19, Vite, Tailwind 4, shadcn/ui              |
 | 音频采集 | macOS: ScreenCaptureKit / Windows: WASAPI loopback |
-| VAD 切句 | 本地能量 VAD（20ms 帧, 360ms 静音断句） |
-| ASR 转写 | 智谱 GLM-ASR-2512（流式 HTTP） |
-| 翻译 LLM | DeepSeek v4 Flash（免费，OpenAI 兼容协议） |
-| 悬浮窗 | macOS: NSPanel / Windows: Win32 透明窗口 |
-| 密钥存储 | Keychain / DPAPI |
-| 本地存储 | SQLite（设置 + 翻译历史） |
+| VAD 切句 | 本地能量 VAD（20ms 帧, 360ms 静音断句）            |
+| ASR 转写 | 智谱 GLM-ASR-2512（流式 HTTP）                     |
+| 翻译 LLM | DeepSeek v4 Flash（免费，OpenAI 兼容协议）         |
+| 悬浮窗   | macOS: NSPanel / Windows: Win32 透明窗口           |
+| 密钥存储 | Keychain / DPAPI                                   |
+| 本地存储 | SQLite（设置 + 翻译历史）                          |
 
 ---
 

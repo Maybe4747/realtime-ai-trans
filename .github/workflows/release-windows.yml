@@ -52,14 +52,31 @@ jobs:
           $cargoToml = $cargoToml -replace '(?m)^version = ".*"', "version = `"$version`""
           Set-Content src-tauri/Cargo.toml $cargoToml -Encoding utf8
 
-      - name: Build and publish Windows bundles
-        uses: tauri-apps/tauri-action@v0
+      - name: Build Windows bundles
+        run: npm run tauri:build
+
+      - name: Publish GitHub Release
+        shell: pwsh
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Lumen ${{ github.ref_name }}
-          generateReleaseNotes: true
-          releaseDraft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          tauriScript: npm run tauri
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $assets = @(
+            Get-ChildItem src-tauri/target/release/bundle/nsis -Filter *.exe -File -ErrorAction SilentlyContinue
+            Get-ChildItem src-tauri/target/release/bundle/msi -Filter *.msi -File -ErrorAction SilentlyContinue
+          ) | ForEach-Object { $_.FullName }
+
+          if (-not $assets) {
+            throw "No Windows bundle assets were found."
+          }
+
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $assets --clobber
+          } else {
+            gh release create $tag $assets --title "Lumen $tag" --generate-notes --verify-tag --latest
+          }
+
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
