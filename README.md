@@ -1,5 +1,9 @@
 # LUMEN · 桌面 AI 同声传译
 
+<center>
+  <img src="./public/logo.svg" alt="LUMEN 桌面 AI 同声传译" width="200" />
+</center>
+
 [![Version](https://img.shields.io/github/package-json/v/Maybe4747/realtime-ai-trans?filename=package.json&label=version)](https://github.com/Maybe4747/realtime-ai-trans/releases)
 [![CI](https://github.com/Maybe4747/realtime-ai-trans/actions/workflows/release-windows.yml/badge.svg)](https://github.com/Maybe4747/realtime-ai-trans/actions/workflows/release-windows.yml)
 [![Install](https://img.shields.io/badge/install-release-blue?logo=github)](https://github.com/Maybe4747/realtime-ai-trans/releases/latest)
@@ -10,6 +14,9 @@
 系统级音频采集 + AI 实时转写翻译 + 悬浮窗双语显示。看视频、上网课、听播客，字幕始终浮在最前，鼠标穿透不挡操作。
 
 **支持 macOS 和 Windows。**
+
+- windows： [Install LUMEN](https://github.com/Maybe4747/realtime-ai-trans/releases/)
+- macos ：（待解决签名认证问题）
 
 ---
 
@@ -83,11 +90,6 @@ LUMEN：   测试 Bun 的新打包器与 esbuild 对比，结果出人意料。
 ---
 
 ## 快速开始
-
-### 安装下载
-
-windows ： https://github.com/Maybe4747/realtime-ai-trans/releases/
-macos ：（待解决签名认证问题）
 
 ### 本地开发
 
