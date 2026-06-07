@@ -21,7 +21,8 @@ const appApi: AppApi = {
   setOverlayBounds: (bounds: OverlayBounds) => ipcRenderer.invoke('overlay:set-bounds', bounds),
   clearHistory: () => ipcRenderer.invoke('history:clear'),
   onSessionEvent: (callback: (event: SessionEvent) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, payload: SessionEvent): void => callback(payload)
+    const listener = (_event: Electron.IpcRendererEvent, payload: SessionEvent): void =>
+      callback(payload)
     ipcRenderer.on('session:event', listener)
     return () => ipcRenderer.removeListener('session:event', listener)
   },
