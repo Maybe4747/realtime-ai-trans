@@ -15,6 +15,16 @@ pub fn run() {
     let builder = builder.plugin(tauri_nspanel::init());
 
     builder
+        .on_window_event(|window, event| {
+            if window.label() == "main" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    if let Err(e) = window.hide() {
+                        eprintln!("[window] 隐藏控制台失败: {e}");
+                    }
+                }
+            }
+        })
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
