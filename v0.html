@@ -1,0 +1,1016 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>听译窗 v0</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --paper: #f5f5f7;
+        --window: rgba(246, 246, 248, 0.86);
+        --sidebar: rgba(232, 233, 237, 0.78);
+        --content: #f5f5f7;
+        --group: rgba(255, 255, 255, 0.82);
+        --group-solid: #ffffff;
+        --separator: rgba(60, 60, 67, 0.16);
+        --separator-soft: rgba(60, 60, 67, 0.1);
+        --text: #1d1d1f;
+        --secondary: #636366;
+        --tertiary: #86868b;
+        --accent: #0071e3;
+        --accent-bg: rgba(0, 113, 227, 0.12);
+        --green: #248a3d;
+        --orange: #c46a16;
+        --red: #c9342f;
+        --radius-sm: 10px;
+        --radius-md: 14px;
+        --radius-lg: 22px;
+        --shadow-window: 0 28px 72px rgba(0, 0, 0, 0.18);
+        --shadow-hairline: 0 1px 2px rgba(0, 0, 0, 0.04);
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Segoe UI', sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        color: var(--text);
+        background: #eceef2;
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      .app-window {
+        width: min(1080px, calc(100vw - 40px));
+        height: min(720px, calc(100vh - 40px));
+        min-height: 640px;
+        display: grid;
+        grid-template-columns: 244px minmax(0, 1fr);
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        border-radius: var(--radius-lg);
+        background: var(--window);
+        box-shadow: var(--shadow-window);
+        backdrop-filter: blur(30px) saturate(1.22);
+      }
+
+      .sidebar {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid var(--separator);
+        background: var(--sidebar);
+        backdrop-filter: blur(30px) saturate(1.18);
+      }
+
+      .traffic-row {
+        height: 54px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 18px;
+      }
+
+      .traffic {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+      }
+
+      .traffic.close {
+        background: #ff5f57;
+      }
+
+      .traffic.minimize {
+        background: #ffbd2e;
+      }
+
+      .traffic.zoom {
+        background: #28c840;
+      }
+
+      .brand {
+        padding: 8px 18px 18px;
+      }
+
+      .brand h1 {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 650;
+        letter-spacing: 0;
+        line-height: 1.12;
+      }
+
+      .brand p {
+        margin: 6px 0 0;
+        color: var(--secondary);
+        font-size: 13px;
+        line-height: 1.35;
+      }
+
+      .nav {
+        display: grid;
+        gap: 3px;
+        padding: 0 10px;
+      }
+
+      .nav button {
+        width: 100%;
+        height: 36px;
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 9px;
+        padding: 0 9px;
+        border: 0;
+        border-radius: var(--radius-sm);
+        color: #2c2c2e;
+        background: transparent;
+        text-align: left;
+      }
+
+      .nav button:hover {
+        background: rgba(255, 255, 255, 0.42);
+      }
+
+      .nav button.active {
+        background: rgba(255, 255, 255, 0.82);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.62);
+      }
+
+      .glyph {
+        width: 24px;
+        height: 24px;
+        display: grid;
+        place-items: center;
+        border-radius: 7px;
+        color: #ffffff;
+        background: #8e8e93;
+      }
+
+      .glyph svg {
+        width: 15px;
+        height: 15px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 2;
+      }
+
+      .nav button[data-view='home'] .glyph {
+        background: var(--accent);
+      }
+
+      .nav button[data-view='settings'] .glyph {
+        background: #6e6e73;
+      }
+
+      .nav-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+        font-weight: 590;
+      }
+
+      .nav-meta {
+        min-width: 20px;
+        height: 20px;
+        display: grid;
+        place-items: center;
+        border-radius: 999px;
+        color: var(--secondary);
+        background: rgba(255, 255, 255, 0.56);
+        font-size: 11px;
+        font-weight: 590;
+      }
+
+      .side-status {
+        margin-top: auto;
+        padding: 16px 18px 18px;
+      }
+
+      .connection-card {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 10px;
+        align-items: center;
+        min-height: 54px;
+        padding: 10px;
+        border: 1px solid var(--separator-soft);
+        border-radius: var(--radius-md);
+        background: rgba(255, 255, 255, 0.58);
+      }
+
+      .state-light {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--orange);
+        box-shadow: 0 0 0 4px rgba(196, 106, 22, 0.12);
+      }
+
+      .connection-card strong {
+        display: block;
+        overflow: hidden;
+        font-size: 12px;
+        font-weight: 650;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .connection-card span {
+        display: block;
+        margin-top: 2px;
+        overflow: hidden;
+        color: var(--secondary);
+        font-size: 11px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .content {
+        min-width: 0;
+        overflow: auto;
+        padding: 34px 40px 40px;
+        background: var(--content);
+      }
+
+      .view {
+        display: none;
+      }
+
+      .view.active {
+        display: block;
+      }
+
+      .page-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 24px;
+      }
+
+      .page-title h2 {
+        margin: 0;
+        color: var(--text);
+        font-size: clamp(28px, 4vw, 36px);
+        font-weight: 650;
+        letter-spacing: 0;
+        line-height: 1.08;
+        text-wrap: pretty;
+      }
+
+      .page-title p {
+        max-width: 520px;
+        margin: 8px 0 0;
+        color: var(--secondary);
+        font-size: 15px;
+        line-height: 1.47;
+        text-wrap: pretty;
+      }
+
+      .text-button {
+        min-width: 92px;
+        height: 34px;
+        padding: 0 14px;
+        border: 0;
+        border-radius: var(--radius-sm);
+        color: #ffffff;
+        background: var(--accent);
+        font-size: 13px;
+        font-weight: 590;
+      }
+
+      .text-button.secondary {
+        color: var(--accent);
+        background: var(--accent-bg);
+      }
+
+      .overview-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .stat-card,
+      .content-group,
+      .settings-group {
+        border: 1px solid var(--separator-soft);
+        border-radius: 18px;
+        background: var(--group);
+        box-shadow: var(--shadow-hairline);
+      }
+
+      .stat-card {
+        min-height: 112px;
+        padding: 15px 16px;
+      }
+
+      .stat-card .label {
+        color: var(--secondary);
+        font-size: 12px;
+        font-weight: 590;
+      }
+
+      .stat-card .value {
+        display: block;
+        margin-top: 16px;
+        color: var(--text);
+        font-size: 31px;
+        font-weight: 650;
+        line-height: 1;
+      }
+
+      .stat-card .caption {
+        display: block;
+        margin-top: 9px;
+        color: var(--tertiary);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .home-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.72fr);
+        gap: 14px;
+      }
+
+      .content-group {
+        overflow: hidden;
+      }
+
+      .group-header {
+        min-height: 52px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--separator);
+      }
+
+      .group-header h3 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 650;
+      }
+
+      .group-header span {
+        color: var(--tertiary);
+        font-size: 12px;
+      }
+
+      .empty-history {
+        min-height: 260px;
+        display: grid;
+        align-content: center;
+        justify-items: center;
+        padding: 36px;
+        text-align: center;
+      }
+
+      .empty-history .empty-symbol {
+        width: 58px;
+        height: 58px;
+        position: relative;
+        display: grid;
+        place-items: center;
+        border-radius: 16px;
+        color: var(--accent);
+        background: var(--accent-bg);
+      }
+
+      .empty-history .empty-symbol::before {
+        content: '';
+        width: 25px;
+        height: 19px;
+        border: 2px solid currentColor;
+        border-radius: 6px;
+      }
+
+      .empty-history .empty-symbol::after {
+        content: '';
+        position: absolute;
+        bottom: 14px;
+        left: 20px;
+        width: 15px;
+        height: 2px;
+        border-radius: 999px;
+        background: currentColor;
+      }
+
+      .empty-history strong {
+        display: block;
+        margin-top: 16px;
+        font-size: 17px;
+        font-weight: 650;
+      }
+
+      .empty-history p {
+        max-width: 340px;
+        margin: 7px 0 0;
+        color: var(--secondary);
+        font-size: 14px;
+        line-height: 1.45;
+        text-wrap: pretty;
+      }
+
+      .insight-stack {
+        display: grid;
+        gap: 0;
+      }
+
+      .insight-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 14px;
+        min-height: 70px;
+        align-items: center;
+        padding: 13px 16px;
+        border-bottom: 1px solid var(--separator-soft);
+      }
+
+      .insight-row:last-child {
+        border-bottom: 0;
+      }
+
+      .insight-row strong {
+        display: block;
+        font-size: 13px;
+        font-weight: 650;
+      }
+
+      .insight-row span {
+        display: block;
+        margin-top: 4px;
+        color: var(--secondary);
+        font-size: 12px;
+        line-height: 1.36;
+        text-wrap: pretty;
+      }
+
+      .micro-value {
+        color: var(--text);
+        font-size: 13px;
+        font-weight: 650;
+        white-space: nowrap;
+      }
+
+      .settings-stack {
+        max-width: 740px;
+        display: grid;
+        gap: 18px;
+      }
+
+      .settings-section-title {
+        margin: 0 0 7px 16px;
+        color: var(--secondary);
+        font-size: 12px;
+        font-weight: 590;
+        text-transform: uppercase;
+      }
+
+      .settings-group {
+        overflow: hidden;
+      }
+
+      .setting-row {
+        min-height: 54px;
+        display: grid;
+        grid-template-columns: 202px minmax(0, 1fr);
+        align-items: center;
+        gap: 18px;
+        padding: 10px 14px 10px 16px;
+        border-bottom: 1px solid var(--separator);
+        background: rgba(255, 255, 255, 0.56);
+      }
+
+      .setting-row:last-child {
+        border-bottom: 0;
+      }
+
+      .setting-label {
+        min-width: 0;
+      }
+
+      .setting-label strong {
+        display: block;
+        font-size: 13px;
+        font-weight: 590;
+      }
+
+      .setting-label span {
+        display: block;
+        margin-top: 3px;
+        color: var(--tertiary);
+        font-size: 12px;
+        line-height: 1.3;
+        text-wrap: pretty;
+      }
+
+      .control {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+
+      .field,
+      .select {
+        height: 32px;
+        min-width: 0;
+        border: 1px solid rgba(60, 60, 67, 0.18);
+        border-radius: 8px;
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.92);
+        outline: none;
+      }
+
+      .field {
+        width: min(100%, 330px);
+        padding: 0 10px;
+      }
+
+      .field.short {
+        width: 118px;
+      }
+
+      .select {
+        width: 174px;
+        padding: 0 8px;
+      }
+
+      .toggle {
+        width: 42px;
+        height: 24px;
+        position: relative;
+        border: 0;
+        border-radius: 999px;
+        background: var(--accent);
+      }
+
+      .toggle.off {
+        background: rgba(120, 120, 128, 0.24);
+      }
+
+      .toggle::after {
+        content: '';
+        width: 20px;
+        height: 20px;
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        border-radius: 50%;
+        background: #ffffff;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+      }
+
+      .toggle.off::after {
+        right: 20px;
+      }
+
+      .slider {
+        width: min(100%, 220px);
+        accent-color: var(--accent);
+      }
+
+      .segmented {
+        width: min(100%, 240px);
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 2px;
+        padding: 3px;
+        border-radius: 9px;
+        background: rgba(120, 120, 128, 0.14);
+      }
+
+      .segmented button {
+        height: 27px;
+        border: 0;
+        border-radius: 7px;
+        color: var(--secondary);
+        background: transparent;
+        font-size: 12px;
+        font-weight: 590;
+      }
+
+      .segmented button.active {
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+      }
+
+      .key-status {
+        height: 24px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 9px;
+        border-radius: 999px;
+        color: var(--orange);
+        background: rgba(196, 106, 22, 0.12);
+        font-size: 12px;
+        font-weight: 590;
+        white-space: nowrap;
+      }
+
+      .key-status::before {
+        content: '';
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+
+      .preview-pane {
+        min-height: 170px;
+        display: grid;
+        place-items: end center;
+        padding: 22px;
+        background: #dfe4ea;
+      }
+
+      .subtitle-preview {
+        width: min(520px, 100%);
+        padding: 12px 16px 11px;
+        border-radius: 12px;
+        color: #ffffff;
+        background: rgba(18, 18, 20, 0.76);
+        backdrop-filter: blur(18px);
+      }
+
+      .subtitle-preview strong {
+        display: block;
+        overflow: hidden;
+        font-size: 20px;
+        font-weight: 590;
+        line-height: 1.28;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .subtitle-preview span {
+        display: block;
+        margin-top: 5px;
+        color: rgba(255, 255, 255, 0.64);
+        font-size: 12px;
+      }
+
+      @media (max-width: 920px) {
+        .app-window {
+          grid-template-columns: 74px minmax(0, 1fr);
+        }
+
+        .brand,
+        .nav-label,
+        .nav-meta,
+        .side-status {
+          display: none;
+        }
+
+        .nav {
+          padding: 8px;
+        }
+
+        .nav button {
+          grid-template-columns: 1fr;
+          justify-items: center;
+          padding: 0;
+        }
+
+        .overview-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .home-layout {
+          grid-template-columns: 1fr;
+        }
+
+        .setting-row {
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+
+        .control {
+          justify-content: flex-start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-window">
+      <aside class="sidebar">
+        <div class="traffic-row" aria-hidden="true">
+          <span class="traffic close"></span>
+          <span class="traffic minimize"></span>
+          <span class="traffic zoom"></span>
+        </div>
+
+        <div class="brand">
+          <h1>听译窗</h1>
+          <p>实时字幕助手</p>
+        </div>
+
+        <nav class="nav" aria-label="主导航">
+          <button class="active" data-view="home">
+            <span class="glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="m3 11 9-8 9 8"></path>
+                <path d="M5 10v10h14V10"></path>
+                <path d="M9 20v-6h6v6"></path>
+              </svg>
+            </span>
+            <span class="nav-label">主页</span>
+            <span class="nav-meta">0</span>
+          </button>
+          <button data-view="settings">
+            <span class="glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M4 7h5"></path>
+                <path d="M13 7h7"></path>
+                <path d="M4 17h9"></path>
+                <path d="M17 17h3"></path>
+                <circle cx="11" cy="7" r="2"></circle>
+                <circle cx="15" cy="17" r="2"></circle>
+              </svg>
+            </span>
+            <span class="nav-label">设置</span>
+            <span class="nav-meta">4</span>
+          </button>
+        </nav>
+
+        <div class="side-status">
+          <div class="connection-card">
+            <span class="state-light"></span>
+            <div>
+              <strong>等待 API Key</strong>
+              <span>环境变量或本机设置</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <main class="content">
+        <section id="home" class="view active">
+          <header class="page-header">
+            <div class="page-title">
+              <h2>主页</h2>
+              <p>查看最近字幕、修正情况和本机使用概览。</p>
+            </div>
+            <button class="text-button">开始听译</button>
+          </header>
+
+          <section class="overview-grid" aria-label="统计">
+            <article class="stat-card">
+              <span class="label">今日听译</span>
+              <strong class="value">0m</strong>
+              <span class="caption">开始会话后统计</span>
+            </article>
+            <article class="stat-card">
+              <span class="label">字幕句数</span>
+              <strong class="value">0</strong>
+              <span class="caption">stable 与 revised</span>
+            </article>
+            <article class="stat-card">
+              <span class="label">自动修正</span>
+              <strong class="value">0</strong>
+              <span class="caption">最近会话窗口</span>
+            </article>
+            <article class="stat-card">
+              <span class="label">平均延迟</span>
+              <strong class="value">--</strong>
+              <span class="caption">需要真实会话数据</span>
+            </article>
+          </section>
+
+          <div class="home-layout">
+            <section class="content-group">
+              <div class="group-header">
+                <h3>最近历史</h3>
+                <span>最近 3 分钟</span>
+              </div>
+              <div class="empty-history">
+                <div class="empty-symbol" aria-hidden="true"></div>
+                <strong>暂无字幕记录</strong>
+                <p>开始听译后，最新字幕和上下文修正会按时间顺序显示在这里。</p>
+              </div>
+            </section>
+
+            <section class="content-group">
+              <div class="group-header">
+                <h3>状态</h3>
+                <span>本机</span>
+              </div>
+              <div class="insight-stack">
+                <div class="insight-row">
+                  <div>
+                    <strong>API Key</strong>
+                    <span>优先读取 ZHIPU_API_KEY，未配置时显示连接提示。</span>
+                  </div>
+                  <span class="micro-value">未检测</span>
+                </div>
+                <div class="insight-row">
+                  <div>
+                    <strong>字幕窗口</strong>
+                    <span>默认屏幕底部居中，窗口始终置顶。</span>
+                  </div>
+                  <span class="micro-value">隐藏</span>
+                </div>
+                <div class="insight-row">
+                  <div>
+                    <strong>会话历史</strong>
+                    <span>仅保留本次运行中的本地记录。</span>
+                  </div>
+                  <span class="micro-value">0 条</span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section id="settings" class="view">
+          <header class="page-header">
+            <div class="page-title">
+              <h2>设置</h2>
+              <p>管理智谱连接、字幕窗口和显示偏好。</p>
+            </div>
+            <button class="text-button secondary">恢复默认</button>
+          </header>
+
+          <div class="settings-stack">
+            <section>
+              <h3 class="settings-section-title">智谱</h3>
+              <div class="settings-group">
+                <div class="setting-row">
+                  <div class="setting-label">
+                    <strong>API Key</strong>
+                    <span>主进程使用，页面侧不读取密钥。</span>
+                  </div>
+                  <div class="control">
+                    <input class="field" type="password" value="" placeholder="ZHIPU_API_KEY" />
+                    <span class="key-status">未配置</span>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-label">
+                    <strong>语音识别</strong>
+                    <span>麦克风音频转文本。</span>
+                  </div>
+                  <div class="control">
+                    <input class="field short" value="glm-asr-2512" readonly />
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-label">
+                    <strong>翻译与修正</strong>
+                    <span>翻译当前片段并修正最近字幕。</span>
+                  </div>
+                  <div class="control">
+                    <input class="field short" value="glm-4.7-flash" readonly />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <h3 class="settings-section-title">语言</h3>
+              <div class="settings-group">
+                <div class="setting-row">
+                  <div class="setting-label">
+                    <strong>源语言</strong>
+                    <span>用于识别和提示词约束。</span>
+                  </div>
+                  <div class="control">
+                    <select class="select">
+                      <option>自动识别</option>
+                      <option>英语</option>
+                      <option>日语</option>
+                      <option>韩语</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-label">
+                    <strong>目标语言</strong>
+                    <span>悬浮字幕和历史记录使用。</span>
+                  </div>
+                  <div class="control">
+                    <select class="select">
+                      <option>简体中文</option>
+                      <option>英语</option>
+                      <option>日语</option>
+                      <option>韩语</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <h3 class="settings-section-title">字幕</h3>
+              <div class="settings-group">
+                <div class="setting-row">
+                  <div class="setting-label">
+                    <strong>字号</strong>
+                    <span>影响悬浮字幕窗口。</span>
+                  </div>
+                  <div class="control">
+                    <input class="slider" type="range" min="18" max="34" value="26" />
+                    <span class="micro-value">26</span>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-label">
+                    <strong>背景透明度</strong>
+                    <span>降低遮挡，同时保持可读性。</span>
+                  </div>
+                  <div class="control">
+                    <input class="slider" type="range" min="40" max="95" value="76" />
+                    <span class="micro-value">76%</span>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-label">
+                    <strong>默认位置</strong>
+                    <span>开始听译时放置悬浮窗。</span>
+                  </div>
+                  <div class="control">
+                    <div class="segmented" role="group" aria-label="默认位置">
+                      <button>顶部</button>
+                      <button class="active">底部</button>
+                      <button>记住</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-label">
+                    <strong>显示原文</strong>
+                    <span>历史面板中保留源语言文本。</span>
+                  </div>
+                  <div class="control">
+                    <button class="toggle" aria-label="显示原文已开启"></button>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-label">
+                    <strong>修正高亮</strong>
+                    <span>前文被替换时短暂提示。</span>
+                  </div>
+                  <div class="control">
+                    <button class="toggle" aria-label="修正高亮已开启"></button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <h3 class="settings-section-title">预览</h3>
+              <div class="settings-group">
+                <div class="preview-pane">
+                  <div class="subtitle-preview">
+                    <strong>字幕预览文本</strong>
+                    <span>底部居中 / 26px / 76%</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const navButtons = document.querySelectorAll('.nav button')
+      const views = document.querySelectorAll('.view')
+
+      navButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const target = button.dataset.view
+          navButtons.forEach((item) => item.classList.toggle('active', item === button))
+          views.forEach((view) => view.classList.toggle('active', view.id === target))
+        })
+      })
+    </script>
+  </body>
+</html>
