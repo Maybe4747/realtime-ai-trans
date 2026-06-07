@@ -25,9 +25,9 @@ const MIN_SEG: usize = DST_RATE * 3 / 10; // 最短 300ms,过短丢弃(噪声)
 const MAX_SEG: usize = DST_RATE * 8; // 最长 8s,兜底拆长句降低端到端延迟
 
 struct Vad {
-    seg: Vec<f32>,     // 当前累积段(16k)
-    frame: Vec<f32>,   // 凑帧算 RMS
-    silence: usize,    // 连续静音帧数
+    seg: Vec<f32>,   // 当前累积段(16k)
+    frame: Vec<f32>, // 凑帧算 RMS
+    silence: usize,  // 连续静音帧数
     in_speech: bool,
     decim_acc: f32, // 48k→16k 抽取累加
     decim_n: usize,
@@ -161,6 +161,8 @@ pub fn start_capture(app: AppHandle) -> Result<(), String> {
     if translate_key.is_empty() {
         return Err("请先在设置中配置 LLM translation API key".to_string());
     }
+    let source_language = config.source_language.clone();
+    let target_language = config.target_language.clone();
 
     let content = SCShareableContent::get().map_err(|e| format!("获取共享内容失败: {e:?}"))?;
     let display = content
@@ -200,6 +202,8 @@ pub fn start_capture(app: AppHandle) -> Result<(), String> {
         rt.block_on(async move {
             // 最近几句(原文, 译文)做翻译上下文,术语/语境连贯。
             let ctx: Arc<Mutex<Vec<(String, String)>>> = Arc::new(Mutex::new(Vec::new()));
+            let source_language = source_language;
+            let target_language = target_language;
             while let Ok(seg) = rx.recv() {
                 if let Some((id, en)) = asr::transcribe(&app2, &client, &asr_key, seg).await {
                     let app3 = app2.clone();
@@ -207,10 +211,20 @@ pub fn start_capture(app: AppHandle) -> Result<(), String> {
                     let key3 = translate_key.clone();
                     let ctx3 = ctx.clone();
                     let ctx_snapshot = ctx.lock().unwrap().clone();
+                    let source_language = source_language.clone();
+                    let target_language = target_language.clone();
                     tokio::spawn(async move {
-                        if let Some(zh) =
-                            translate::translate(&app3, &client3, &key3, id, &en, &ctx_snapshot)
-                                .await
+                        if let Some(zh) = translate::translate(
+                            &app3,
+                            &client3,
+                            &key3,
+                            id,
+                            &en,
+                            &ctx_snapshot,
+                            &source_language,
+                            &target_language,
+                        )
+                        .await
                         {
                             let mut ctx = ctx3.lock().unwrap();
                             ctx.push((en, zh));

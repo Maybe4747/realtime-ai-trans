@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>LUMEN 字幕</title>
 <style>
+  :root{
+    --subtitle-en-size:19px;
+    --subtitle-zh-size:30px;
+    --subtitle-en-color:#1d1d1f;
+    --subtitle-zh-color:#111113;
+    --subtitle-bg-soft:rgba(255,255,255,.76);
+    --subtitle-bg-strong:rgba(255,255,255,.92);
+  }
   *{margin:0;padding:0;box-sizing:border-box}
   html,body{height:100%;background:transparent;overflow:hidden;user-select:none}
   body{display:flex;align-items:flex-end;justify-content:center;padding:0 24px 34px}
@@ -19,23 +27,23 @@
 
   .en{
     font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;
-    font-size:clamp(.95rem,1.6vw,1.2rem);line-height:1.65;color:#1d1d1f;
+    font-size:var(--subtitle-en-size);line-height:1.65;color:var(--subtitle-en-color);
     letter-spacing:0;text-shadow:none;
   }
   .en.partial{color:#2f3033}
 
   .zh{
     font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
-    font-weight:520;font-size:clamp(1.38rem,2.8vw,2.2rem);line-height:1.55;color:#111113;
+    font-weight:520;font-size:var(--subtitle-zh-size);line-height:1.55;color:var(--subtitle-zh-color);
     letter-spacing:0;text-shadow:none;
   }
   .text-bg{
     display:inline;padding:.12em .38em;border-radius:.36em;
-    background:rgba(255,255,255,.9);
+    background:var(--subtitle-bg-strong);
     -webkit-box-decoration-break:clone;box-decoration-break:clone;
   }
-  .en .text-bg{background:rgba(255,255,255,.76)}
-  .zh .text-bg{background:rgba(255,255,255,.92)}
+  .en .text-bg{background:var(--subtitle-bg-soft)}
+  .zh .text-bg{background:var(--subtitle-bg-strong)}
   .term{color:inherit;font-weight:620}
   .err .text-bg{
     background:rgba(255,255,255,.92);color:#b42318;
@@ -152,12 +160,42 @@
     minDwellMs = Number(p.minDwellMs) || minDwellMs;
     maxDwellMs = Number(p.maxDwellMs) || maxDwellMs;
     maxQueue = Number(p.maxQueue) || maxQueue;
+    applySubtitleStyle(p);
     const current = records.get(currentId);
     if (current) {
       renderRecord(current);
     } else {
       updateVisibility();
     }
+  }
+
+  function applySubtitleStyle(p) {
+    const root = document.documentElement.style;
+    const size = clamp(Number(p.subtitleFontSize) || 30, 18, 64);
+    root.setProperty("--subtitle-zh-size", `${size}px`);
+    root.setProperty("--subtitle-en-size", `${Math.max(13, Math.round(size * 0.63))}px`);
+    if (isHexColor(p.subtitleOriginalColor)) {
+      root.setProperty("--subtitle-en-color", p.subtitleOriginalColor);
+    }
+    if (isHexColor(p.subtitleTranslatedColor)) {
+      root.setProperty("--subtitle-zh-color", p.subtitleTranslatedColor);
+    }
+    if (isHexColor(p.subtitleBackgroundColor)) {
+      const opacity = clamp(Number(p.subtitleBackgroundOpacity), 0, 100) / 100;
+      root.setProperty("--subtitle-bg-strong", hexToRgba(p.subtitleBackgroundColor, opacity));
+      root.setProperty("--subtitle-bg-soft", hexToRgba(p.subtitleBackgroundColor, opacity * 0.82));
+    }
+  }
+
+  function isHexColor(value) {
+    return /^#[0-9a-fA-F]{6}$/.test(value || "");
+  }
+
+  function hexToRgba(hex, opacity) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${opacity})`;
   }
 
   function schedule(delay) {

@@ -32,7 +32,14 @@ pub async fn translate_text_tool(app: AppHandle, text: String) -> Result<String,
         return Err("请先在设置中填写翻译访问密钥".to_string());
     }
     let client = reqwest::Client::new();
-    translate::translate_text(&client, key, &text).await
+    translate::translate_text(
+        &client,
+        key,
+        &text,
+        &config.source_language,
+        &config.target_language,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -76,7 +83,14 @@ pub async fn process_audio_tool(
     )
     .await?;
     let translated = if request.translate {
-        translate::translate_text(&client, llm_key, &original).await?
+        translate::translate_text(
+            &client,
+            llm_key,
+            &original,
+            &config.source_language,
+            &config.target_language,
+        )
+        .await?
     } else {
         String::new()
     };

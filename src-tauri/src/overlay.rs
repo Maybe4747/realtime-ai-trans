@@ -2,9 +2,7 @@
 // 验证:字幕窗能浮在全屏 app 之上(NSPanel + collectionBehavior),且鼠标穿透。
 
 use tauri::{AppHandle, Manager};
-use tauri_nspanel::{
-    tauri_panel, CollectionBehavior, PanelLevel, StyleMask, WebviewWindowExt,
-};
+use tauri_nspanel::{tauri_panel, CollectionBehavior, PanelLevel, StyleMask, WebviewWindowExt};
 
 tauri_panel! {
     panel!(SubtitlePanel {

@@ -2,9 +2,10 @@ mod asr;
 mod audio;
 mod db;
 mod overlay;
-mod tray;
+mod prompts;
 mod tools;
 mod translate;
+mod tray;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -29,6 +30,7 @@ pub fn run() {
             audio::start_capture,
             audio::stop_capture,
             db::get_app_config,
+            db::get_translation_history,
             db::save_app_config,
             overlay::set_subtitle_click_through,
             tools::process_audio_tool,

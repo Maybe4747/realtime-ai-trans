@@ -36,14 +36,22 @@ type AppConfig = {
   asrApiKey: string;
   llmProvider: string;
   llmApiKey: string;
+  sourceLanguage: string;
+  targetLanguage: string;
   subtitleMode: string;
   minDwellMs: number;
   maxDwellMs: number;
   maxQueue: number;
+  subtitleFontSize: number;
+  subtitleOriginalColor: string;
+  subtitleTranslatedColor: string;
+  subtitleBackgroundColor: string;
+  subtitleBackgroundOpacity: number;
   saveHistory: boolean;
 };
 
 type SubtitleEvent = {
+  id: number;
   original: string;
   translated: string;
   status: string;
@@ -59,15 +67,31 @@ type AudioToolResult = {
   translated: string;
 };
 
+type TranslationHistoryItem = {
+  id: number;
+  original: string;
+  translated: string;
+  sourceLanguage: string;
+  targetLanguage: string;
+  createdAt: string;
+};
+
 const defaultConfig: AppConfig = {
   asrProvider: "zhipu_glm_asr",
   asrApiKey: "",
   llmProvider: "deepseek_v4_flash",
   llmApiKey: "",
+  sourceLanguage: "en",
+  targetLanguage: "zh-CN",
   subtitleMode: "bilingual",
   minDwellMs: 1800,
   maxDwellMs: 4200,
   maxQueue: 5,
+  subtitleFontSize: 30,
+  subtitleOriginalColor: "#1d1d1f",
+  subtitleTranslatedColor: "#111113",
+  subtitleBackgroundColor: "#ffffff",
+  subtitleBackgroundOpacity: 92,
   saveHistory: true,
 };
 
@@ -82,6 +106,22 @@ const toolItems: Array<{ id: View; label: string; icon: typeof LayoutDashboardIc
   { id: "toolsAudio", label: "音频转文字", icon: FileAudioIcon },
 ];
 
+const languageOptions = [
+  { value: "auto", label: "自动识别" },
+  { value: "en", label: "英文" },
+  { value: "zh-CN", label: "简体中文" },
+  { value: "zh-TW", label: "繁体中文" },
+  { value: "ja", label: "日文" },
+  { value: "ko", label: "韩文" },
+  { value: "es", label: "西班牙文" },
+  { value: "fr", label: "法文" },
+  { value: "de", label: "德文" },
+];
+
+function languageLabel(value: string) {
+  return languageOptions.find((item) => item.value === value)?.label || value;
+}
+
 function App() {
   const [view, setView] = useState<View>("home");
   const [status, setStatus] = useState<Status>("idle");
@@ -93,6 +133,8 @@ function App() {
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState<AppConfig>(defaultConfig);
   const [toolsOpen, setToolsOpen] = useState(true);
+  const [history, setHistory] = useState<TranslationHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const configured = Boolean(config.asrApiKey.trim() && config.llmApiKey.trim());
   const inTools = view === "toolsText" || view === "toolsAudio";
@@ -107,6 +149,7 @@ function App() {
     invoke<AppConfig>("get_app_config")
       .then((saved) => setConfig(saved))
       .catch((e) => setMsg(`配置读取失败: ${e}`));
+    loadHistory();
   }, []);
 
   useEffect(() => {
@@ -118,11 +161,24 @@ function App() {
       }
       if (p.original) setLastEn(p.original);
       if (p.translated) setLastZh(p.translated);
+      if (config.saveHistory && p.status === "done" && p.original && p.translated) {
+        setHistory((items) => [
+          {
+            id: Date.now(),
+            original: p.original,
+            translated: p.translated,
+            sourceLanguage: config.sourceLanguage,
+            targetLanguage: config.targetLanguage,
+            createdAt: new Date().toISOString(),
+          },
+          ...items,
+        ].slice(0, 50));
+      }
     });
     return () => {
       un.then((f) => f());
     };
-  }, []);
+  }, [config.saveHistory, config.sourceLanguage, config.targetLanguage]);
 
   useEffect(() => {
     const un = listen<CaptureStateEvent>("capture_state", (e) => {
@@ -165,13 +221,13 @@ function App() {
     }
   }
 
-  async function saveConfig() {
+  async function saveConfig(nextConfig = config, successMessage = "设置已保存") {
     setSaving(true);
     setMsg("");
     try {
-      const saved = await invoke<AppConfig>("save_app_config", { config });
+      const saved = await invoke<AppConfig>("save_app_config", { config: nextConfig });
       setConfig(saved);
-      setMsg("设置已保存");
+      setMsg(successMessage);
     } catch (e) {
       setMsg(`保存失败: ${e}`);
     } finally {
@@ -181,6 +237,24 @@ function App() {
 
   function updateConfig<K extends keyof AppConfig>(key: K, value: AppConfig[K]) {
     setConfig((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function saveLanguage(sourceLanguage: string, targetLanguage: string) {
+    const nextConfig = { ...config, sourceLanguage, targetLanguage };
+    setConfig(nextConfig);
+    await saveConfig(nextConfig, "翻译语言已保存");
+  }
+
+  async function loadHistory() {
+    setHistoryLoading(true);
+    try {
+      const items = await invoke<TranslationHistoryItem[]>("get_translation_history", { limit: 50 });
+      setHistory(items);
+    } catch (e) {
+      setMsg(`历史读取失败: ${e}`);
+    } finally {
+      setHistoryLoading(false);
+    }
   }
 
   return (
@@ -287,10 +361,14 @@ function App() {
               lastEn={lastEn}
               lastZh={lastZh}
               clickThrough={clickThrough}
+              sourceLanguage={config.sourceLanguage}
+              targetLanguage={config.targetLanguage}
+              saving={saving}
               onToggleClickThrough={toggleClickThrough}
+              onLanguageChange={saveLanguage}
             />
           )}
-          {view === "history" && <HistoryView />}
+          {view === "history" && <HistoryView items={history} loading={historyLoading} onRefresh={loadHistory} />}
           {view === "toolsText" && <TextToolView configured={configured} />}
           {view === "toolsAudio" && <AudioToolView configured={configured} />}
           {view === "settings" && (
@@ -315,14 +393,22 @@ function HomeView({
   lastEn,
   lastZh,
   clickThrough,
+  sourceLanguage,
+  targetLanguage,
+  saving,
   onToggleClickThrough,
+  onLanguageChange,
 }: {
   statusLabel: string;
   configured: boolean;
   lastEn: string;
   lastZh: string;
   clickThrough: boolean;
+  sourceLanguage: string;
+  targetLanguage: string;
+  saving: boolean;
   onToggleClickThrough: () => void;
+  onLanguageChange: (sourceLanguage: string, targetLanguage: string) => void;
 }) {
   const stats = [
     { label: "累计使用时长", value: "0h 00m", hint: "从保存的使用记录统计" },
@@ -348,6 +434,33 @@ function HomeView({
               <CaptionsIcon data-icon="inline-start" />
               鼠标穿透: {clickThrough ? "开" : "关"}
             </Button>
+            <div className="quick-language">
+              <label>
+                <span>输入语言</span>
+                <select
+                  value={sourceLanguage}
+                  disabled={saving}
+                  onChange={(e) => onLanguageChange(e.target.value, targetLanguage)}
+                >
+                  {languageOptions.map((item) => (
+                    <option key={item.value} value={item.value}>{item.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>目标语言</span>
+                <select
+                  value={targetLanguage}
+                  disabled={saving}
+                  onChange={(e) => onLanguageChange(sourceLanguage, e.target.value)}
+                >
+                  {languageOptions.filter((item) => item.value !== "auto").map((item) => (
+                    <option key={item.value} value={item.value}>{item.label}</option>
+                  ))}
+                </select>
+              </label>
+              <small>{saving ? "正在保存" : "修改后自动保存"}</small>
+            </div>
           </CardContent>
         </Card>
 
@@ -380,22 +493,62 @@ function HomeView({
   );
 }
 
-function HistoryView() {
+function HistoryView({
+  items,
+  loading,
+  onRefresh,
+}: {
+  items: TranslationHistoryItem[];
+  loading: boolean;
+  onRefresh: () => void;
+}) {
   return (
     <Card>
       <CardHeader>
         <CardTitle>历史记录</CardTitle>
-        <CardDescription>保存后可在这里回看最近的字幕内容。</CardDescription>
+        <CardDescription>最近保存的识别和翻译内容。</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="empty-state">
-          <HistoryIcon />
-          <p>暂无历史记录</p>
-          <span>开始一次同传后，识别和翻译内容会在这里显示。</span>
-        </div>
+        {items.length > 0 ? (
+          <div className="history-list">
+            <div className="history-toolbar">
+              <span>{items.length} 条记录</span>
+              <Button variant="outline" onClick={onRefresh} disabled={loading}>
+                {loading ? "刷新中" : "刷新"}
+              </Button>
+            </div>
+            {items.map((item) => (
+              <article className="history-item" key={`${item.id}-${item.createdAt}`}>
+                <div className="history-meta">
+                  <span>{formatHistoryTime(item.createdAt)}</span>
+                  <span>{languageLabel(item.sourceLanguage)} → {languageLabel(item.targetLanguage)}</span>
+                </div>
+                <p className="history-original">{item.original}</p>
+                <p className="history-translated">{item.translated}</p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state">
+            <HistoryIcon />
+            <p>{loading ? "正在读取历史记录" : "暂无历史记录"}</p>
+            <span>开始一次同传后，识别和翻译内容会在这里显示。</span>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
+}
+
+function formatHistoryTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function TextToolView({ configured }: { configured: boolean }) {
@@ -623,58 +776,157 @@ function SettingsView({
 
         <Card>
           <CardHeader>
+            <CardTitle>翻译语言</CardTitle>
+            <CardDescription>选择输入内容的语言，以及字幕要输出的语言。</CardDescription>
+          </CardHeader>
+          <CardContent className="form-grid">
+            <label className="field">
+              <span>输入语言</span>
+              <select value={config.sourceLanguage} onChange={(e) => onChange("sourceLanguage", e.target.value)}>
+                {languageOptions.map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </select>
+              <small>系统音频一般选择英文；不确定时可选择自动识别。</small>
+            </label>
+            <label className="field">
+              <span>目标语言</span>
+              <select value={config.targetLanguage} onChange={(e) => onChange("targetLanguage", e.target.value)}>
+                {languageOptions.filter((item) => item.value !== "auto").map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </select>
+              <small>翻译字幕会按这里选择的语言输出。</small>
+            </label>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle>字幕显示</CardTitle>
             <CardDescription>调整字幕的显示方式和阅读时间。</CardDescription>
           </CardHeader>
           <CardContent className="form-grid">
-          <label className="field">
-            <span>显示模式</span>
-            <select value={config.subtitleMode} onChange={(e) => onChange("subtitleMode", e.target.value)}>
-              <option value="bilingual">双语</option>
-              <option value="zh_only">仅中文</option>
-              <option value="en_only">仅英文</option>
-            </select>
-          </label>
-          <label className="field">
-            <span>最短显示时间</span>
-            <Input
-              type="number"
-              min={500}
-              value={config.minDwellMs}
-              onChange={(e) => onChange("minDwellMs", Number(e.target.value))}
-            />
-          </label>
-          <label className="field">
-            <span>最长显示时间</span>
-            <Input
-              type="number"
-              min={500}
-              value={config.maxDwellMs}
-              onChange={(e) => onChange("maxDwellMs", Number(e.target.value))}
-            />
-          </label>
-          <label className="field">
-            <span>最多等待句数</span>
-            <Input
-              type="number"
-              min={1}
-              max={20}
-              value={config.maxQueue}
-              onChange={(e) => onChange("maxQueue", Number(e.target.value))}
-            />
-          </label>
-          <div className="switch-row">
-            <div>
-              <p>保存历史</p>
-              <span>关闭后，本次使用的字幕内容不会出现在历史记录中。</span>
+            <label className="field">
+              <span>显示模式</span>
+              <select value={config.subtitleMode} onChange={(e) => onChange("subtitleMode", e.target.value)}>
+                <option value="bilingual">双语</option>
+                <option value="zh_only">仅中文</option>
+                <option value="en_only">仅英文</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>译文字号</span>
+              <Input
+                type="number"
+                min={18}
+                max={64}
+                value={config.subtitleFontSize}
+                onChange={(e) => onChange("subtitleFontSize", Number(e.target.value))}
+              />
+            </label>
+            <div className="color-grid">
+              <label className="field">
+                <span>原文颜色</span>
+                <Input
+                  type="color"
+                  value={config.subtitleOriginalColor}
+                  onChange={(e) => onChange("subtitleOriginalColor", e.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span>译文颜色</span>
+                <Input
+                  type="color"
+                  value={config.subtitleTranslatedColor}
+                  onChange={(e) => onChange("subtitleTranslatedColor", e.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span>文字背景</span>
+                <Input
+                  type="color"
+                  value={config.subtitleBackgroundColor}
+                  onChange={(e) => onChange("subtitleBackgroundColor", e.target.value)}
+                />
+              </label>
             </div>
-            <Switch checked={config.saveHistory} onCheckedChange={(checked) => onChange("saveHistory", Boolean(checked))} />
-          </div>
+            <label className="field">
+              <span>背景透明度</span>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                value={config.subtitleBackgroundOpacity}
+                onChange={(e) => onChange("subtitleBackgroundOpacity", Number(e.target.value))}
+              />
+            </label>
+            <label className="field">
+              <span>最短显示时间</span>
+              <Input
+                type="number"
+                min={500}
+                value={config.minDwellMs}
+                onChange={(e) => onChange("minDwellMs", Number(e.target.value))}
+              />
+            </label>
+            <label className="field">
+              <span>最长显示时间</span>
+              <Input
+                type="number"
+                min={500}
+                value={config.maxDwellMs}
+                onChange={(e) => onChange("maxDwellMs", Number(e.target.value))}
+              />
+            </label>
+            <label className="field">
+              <span>最多等待句数</span>
+              <Input
+                type="number"
+                min={1}
+                max={20}
+                value={config.maxQueue}
+                onChange={(e) => onChange("maxQueue", Number(e.target.value))}
+              />
+            </label>
+            <div className="subtitle-style-preview">
+              <p style={{ color: config.subtitleOriginalColor }}>
+                <span style={{ backgroundColor: hexToRgba(config.subtitleBackgroundColor, config.subtitleBackgroundOpacity * 0.82) }}>
+                  Sample subtitle
+                </span>
+              </p>
+              <strong
+                style={{
+                  color: config.subtitleTranslatedColor,
+                  fontSize: `${Math.min(32, Math.max(18, config.subtitleFontSize))}px`,
+                }}
+              >
+                <span style={{ backgroundColor: hexToRgba(config.subtitleBackgroundColor, config.subtitleBackgroundOpacity) }}>
+                  字幕预览
+                </span>
+              </strong>
+            </div>
+            <div className="switch-row">
+              <div>
+                <p>保存历史</p>
+                <span>关闭后，本次使用的字幕内容不会出现在历史记录中。</span>
+              </div>
+              <Switch checked={config.saveHistory} onCheckedChange={(checked) => onChange("saveHistory", Boolean(checked))} />
+            </div>
           </CardContent>
         </Card>
       </div>
     </div>
   );
+}
+
+function hexToRgba(hex: string, opacity: number) {
+  const normalized = /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : "#ffffff";
+  const alpha = Math.max(0, Math.min(100, opacity)) / 100;
+  const r = parseInt(normalized.slice(1, 3), 16);
+  const g = parseInt(normalized.slice(3, 5), 16);
+  const b = parseInt(normalized.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 export default App;

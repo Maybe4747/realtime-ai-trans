@@ -7,13 +7,9 @@ use serde_json::json;
 use tauri::AppHandle;
 
 use crate::asr::emit_subtitle;
+use crate::{db, prompts};
 
 const CHAT_URL: &str = "https://api.deepseek.com/chat/completions";
-
-const SYS: &str = "你是实时字幕的同声传译。把英文口语逐句翻成自然、简洁的简体中文。\
-保留专有名词、产品名、库名、框架名、技术术语、代码标识符为英文原文,不要硬译\
-(例如 Bun、Node、Deno、JavaScript、TypeScript 保持英文)。\
-只输出译文本身,不要加引号、不要解释、不要附原文。";
 
 /// 翻译一句,流式 emit 中文。ctx 为最近几句(原文, 译文)做术语/语境连贯。
 /// 返回译文(供加入上下文);出错返回 None。
@@ -24,8 +20,11 @@ pub async fn translate(
     id: u64,
     en: &str,
     ctx: &[(String, String)],
+    source_language: &str,
+    target_language: &str,
 ) -> Option<String> {
-    let mut messages = vec![json!({"role": "system", "content": SYS})];
+    let system = prompts::translation_system_prompt(source_language, target_language);
+    let mut messages = vec![json!({"role": "system", "content": system})];
     for (src, dst) in ctx {
         messages.push(json!({"role": "user", "content": src}));
         messages.push(json!({"role": "assistant", "content": dst}));
@@ -37,11 +36,17 @@ pub async fn translate(
         "stream": true,
         "thinking": { "type": "disabled" },
         "temperature": 0.1,
-        "max_tokens": 256,
+        "max_tokens": 160,
         "messages": messages,
     });
 
-    let resp = match client.post(CHAT_URL).bearer_auth(key).json(&body).send().await {
+    let resp = match client
+        .post(CHAT_URL)
+        .bearer_auth(key)
+        .json(&body)
+        .send()
+        .await
+    {
         Ok(r) => r,
         Err(e) => {
             emit_subtitle(app, id, en, &format!("[翻译请求失败] {e}"), "error");
@@ -71,8 +76,7 @@ pub async fn translate(
             };
             let data = data.trim();
             if data == "[DONE]" {
-                emit_subtitle(app, id, en, &zh, "done");
-                return non_empty(zh);
+                return finish_translation(app, id, en, zh, source_language, target_language);
             }
             let Ok(v) = serde_json::from_str::<serde_json::Value>(data) else {
                 continue;
@@ -91,18 +95,20 @@ pub async fn translate(
             }
         }
     }
-    emit_subtitle(app, id, en, &zh, "done");
-    non_empty(zh)
+    finish_translation(app, id, en, zh, source_language, target_language)
 }
 
 pub async fn translate_text(
     client: &reqwest::Client,
     key: &str,
     text: &str,
+    source_language: &str,
+    target_language: &str,
 ) -> Result<String, String> {
     if text.trim().is_empty() {
         return Err("请输入需要翻译的内容".to_string());
     }
+    let system = prompts::translation_system_prompt(source_language, target_language);
     let body = json!({
         "model": "deepseek-v4-flash",
         "stream": false,
@@ -110,7 +116,7 @@ pub async fn translate_text(
         "temperature": 0.1,
         "max_tokens": 4096,
         "messages": [
-            { "role": "system", "content": SYS },
+            { "role": "system", "content": system },
             { "role": "user", "content": text }
         ],
     });
@@ -146,10 +152,26 @@ pub async fn translate_text(
     }
 }
 
-fn non_empty(s: String) -> Option<String> {
-    if s.trim().is_empty() {
+fn finish_translation(
+    app: &AppHandle,
+    id: u64,
+    original: &str,
+    translated: String,
+    source_language: &str,
+    target_language: &str,
+) -> Option<String> {
+    let translated = translated.trim().to_string();
+    emit_subtitle(app, id, original, &translated, "done");
+    if translated.is_empty() {
         None
     } else {
-        Some(s)
+        let _ = db::save_translation_history(
+            app,
+            original,
+            &translated,
+            source_language,
+            target_language,
+        );
+        Some(translated)
     }
 }
