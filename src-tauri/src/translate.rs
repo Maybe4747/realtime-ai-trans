@@ -95,6 +95,57 @@ pub async fn translate(
     non_empty(zh)
 }
 
+pub async fn translate_text(
+    client: &reqwest::Client,
+    key: &str,
+    text: &str,
+) -> Result<String, String> {
+    if text.trim().is_empty() {
+        return Err("请输入需要翻译的内容".to_string());
+    }
+    let body = json!({
+        "model": "deepseek-v4-flash",
+        "stream": false,
+        "thinking": { "type": "disabled" },
+        "temperature": 0.1,
+        "max_tokens": 4096,
+        "messages": [
+            { "role": "system", "content": SYS },
+            { "role": "user", "content": text }
+        ],
+    });
+    let resp = client
+        .post(CHAT_URL)
+        .bearer_auth(key)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("翻译请求失败: {e}"))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let detail = resp.text().await.unwrap_or_default();
+        return Err(format!("翻译失败({status}): {detail}"));
+    }
+    let v = resp
+        .json::<serde_json::Value>()
+        .await
+        .map_err(|e| format!("解析翻译结果失败: {e}"))?;
+    let translated = v
+        .get("choices")
+        .and_then(|c| c.get(0))
+        .and_then(|c| c.get("message"))
+        .and_then(|m| m.get("content"))
+        .and_then(|s| s.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if translated.is_empty() {
+        Err("没有获得翻译结果".to_string())
+    } else {
+        Ok(translated)
+    }
+}
+
 fn non_empty(s: String) -> Option<String> {
     if s.trim().is_empty() {
         None

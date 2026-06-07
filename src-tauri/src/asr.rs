@@ -153,6 +153,87 @@ pub async fn transcribe(
     finalize(app, id, text)
 }
 
+pub async fn transcribe_file(
+    client: &reqwest::Client,
+    key: &str,
+    file_name: &str,
+    mime_type: &str,
+    bytes: Vec<u8>,
+) -> Result<String, String> {
+    let part = reqwest::multipart::Part::bytes(bytes)
+        .file_name(file_name.to_string())
+        .mime_str(mime_type)
+        .map_err(|e| format!("读取文件失败: {e}"))?;
+    let form = reqwest::multipart::Form::new()
+        .text("model", "glm-asr-2512")
+        .text("stream", "true")
+        .part("file", part);
+    let resp = client
+        .post(ASR_URL)
+        .bearer_auth(key)
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| format!("识别请求失败: {e}"))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("识别失败({status}): {body}"));
+    }
+    collect_transcript(resp).await
+}
+
+async fn collect_transcript(resp: reqwest::Response) -> Result<String, String> {
+    let mut stream = resp.bytes_stream();
+    let mut line_buf = String::new();
+    let mut text = String::new();
+
+    while let Some(chunk) = stream.next().await {
+        let bytes = chunk.map_err(|e| format!("读取识别结果失败: {e}"))?;
+        line_buf.push_str(&String::from_utf8_lossy(&bytes));
+
+        while let Some(pos) = line_buf.find('\n') {
+            let line: String = line_buf.drain(..=pos).collect();
+            let line = line.trim();
+            let Some(data) = line.strip_prefix("data:") else {
+                continue;
+            };
+            let data = data.trim();
+            if data == "[DONE]" {
+                return non_empty_text(text);
+            }
+            let Ok(v) = serde_json::from_str::<serde_json::Value>(data) else {
+                continue;
+            };
+            match v.get("type").and_then(|x| x.as_str()).unwrap_or("") {
+                "transcript.text.delta" => {
+                    if let Some(d) = v.get("delta").and_then(|x| x.as_str()) {
+                        text.push_str(d);
+                    }
+                }
+                "transcript.text.done" => {
+                    if let Some(full) = v.get("text").and_then(|x| x.as_str()) {
+                        if !full.is_empty() {
+                            text = full.to_string();
+                        }
+                    }
+                    return non_empty_text(text);
+                }
+                _ => {}
+            }
+        }
+    }
+    non_empty_text(text)
+}
+
+fn non_empty_text(text: String) -> Result<String, String> {
+    if text.trim().is_empty() {
+        Err("没有识别到可用文字".to_string())
+    } else {
+        Ok(text)
+    }
+}
+
 // 后置过滤(design §5.3):空串/纯空白不出字幕,避免静音误识别污染。
 fn finalize(app: &AppHandle, id: u64, text: String) -> Option<(u64, String)> {
     if text.trim().is_empty() {

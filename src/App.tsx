@@ -4,12 +4,15 @@ import { listen } from "@tauri-apps/api/event";
 import {
   ActivityIcon,
   CaptionsIcon,
+  FileAudioIcon,
   HistoryIcon,
   KeyRoundIcon,
   LayoutDashboardIcon,
+  ChevronDownIcon,
   PlayIcon,
   SettingsIcon,
   SquareIcon,
+  WrenchIcon,
 } from "lucide-react";
 import "./App.css";
 
@@ -26,7 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 
 type Status = "idle" | "running";
-type View = "home" | "history" | "settings";
+type View = "home" | "history" | "toolsText" | "toolsAudio" | "settings";
 
 type AppConfig = {
   asrProvider: string;
@@ -44,6 +47,16 @@ type SubtitleEvent = {
   original: string;
   translated: string;
   status: string;
+};
+
+type CaptureStateEvent = {
+  running: boolean;
+  message: string;
+};
+
+type AudioToolResult = {
+  original: string;
+  translated: string;
 };
 
 const defaultConfig: AppConfig = {
@@ -64,6 +77,11 @@ const navItems: Array<{ id: View; label: string; icon: typeof LayoutDashboardIco
   { id: "settings", label: "设置", icon: SettingsIcon },
 ];
 
+const toolItems: Array<{ id: View; label: string; icon: typeof LayoutDashboardIcon }> = [
+  { id: "toolsText", label: "文本翻译", icon: WrenchIcon },
+  { id: "toolsAudio", label: "音频转文字", icon: FileAudioIcon },
+];
+
 function App() {
   const [view, setView] = useState<View>("home");
   const [status, setStatus] = useState<Status>("idle");
@@ -74,8 +92,10 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState<AppConfig>(defaultConfig);
+  const [toolsOpen, setToolsOpen] = useState(true);
 
   const configured = Boolean(config.asrApiKey.trim() && config.llmApiKey.trim());
+  const inTools = view === "toolsText" || view === "toolsAudio";
 
   const statusLabel = useMemo(() => {
     if (status === "running") return "采集中";
@@ -98,6 +118,16 @@ function App() {
       }
       if (p.original) setLastEn(p.original);
       if (p.translated) setLastZh(p.translated);
+    });
+    return () => {
+      un.then((f) => f());
+    };
+  }, []);
+
+  useEffect(() => {
+    const un = listen<CaptureStateEvent>("capture_state", (e) => {
+      setStatus(e.payload.running ? "running" : "idle");
+      if (e.payload.message) setMsg(e.payload.message);
     });
     return () => {
       un.then((f) => f());
@@ -165,7 +195,48 @@ function App() {
         </div>
 
         <nav className="nav-list">
-          {navItems.map((item) => {
+          {navItems.slice(0, 2).map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                className={`nav-item ${view === item.id ? "active" : ""}`}
+                onClick={() => setView(item.id)}
+              >
+                <Icon data-icon="inline-start" />
+                {item.label}
+              </button>
+            );
+          })}
+          <div className="nav-group">
+            <button
+              className={`nav-item nav-parent ${inTools ? "active" : ""}`}
+              onClick={() => setToolsOpen((open) => !open)}
+              aria-expanded={toolsOpen}
+            >
+              <WrenchIcon data-icon="inline-start" />
+              工具
+              <ChevronDownIcon className={`nav-chevron ${toolsOpen ? "open" : ""}`} />
+            </button>
+            {toolsOpen && (
+              <div className="nav-sublist">
+                {toolItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      className={`nav-item nav-subitem ${view === item.id ? "active" : ""}`}
+                      onClick={() => setView(item.id)}
+                    >
+                      <Icon data-icon="inline-start" />
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          {navItems.slice(2).map((item) => {
             const Icon = item.icon;
             return (
               <button
@@ -190,7 +261,17 @@ function App() {
         <header className="topbar">
           <div>
             <p className="eyebrow">控制台</p>
-            <h2>{view === "home" ? "实时同传" : view === "history" ? "翻译历史" : "设置"}</h2>
+            <h2>
+              {view === "home"
+                ? "实时同传"
+                : view === "history"
+                  ? "翻译历史"
+                  : view === "toolsText"
+                    ? "文本翻译"
+                    : view === "toolsAudio"
+                      ? "音频转文字"
+                      : "设置"}
+            </h2>
           </div>
           <Button onClick={toggle} disabled={busy || (!configured && status === "idle")} variant={status === "running" ? "destructive" : "default"}>
             {status === "running" ? <SquareIcon data-icon="inline-start" /> : <PlayIcon data-icon="inline-start" />}
@@ -210,6 +291,8 @@ function App() {
             />
           )}
           {view === "history" && <HistoryView />}
+          {view === "toolsText" && <TextToolView configured={configured} />}
+          {view === "toolsAudio" && <AudioToolView configured={configured} />}
           {view === "settings" && (
             <SettingsView
               config={config}
@@ -315,6 +398,162 @@ function HistoryView() {
   );
 }
 
+function TextToolView({ configured }: { configured: boolean }) {
+  const [sourceText, setSourceText] = useState("");
+  const [translatedText, setTranslatedText] = useState("");
+  const [textBusy, setTextBusy] = useState(false);
+  const [toolMsg, setToolMsg] = useState("");
+
+  async function runTextTranslate() {
+    setToolMsg("");
+    setTranslatedText("");
+    if (!sourceText.trim()) {
+      setToolMsg("请输入需要翻译的内容");
+      return;
+    }
+    setTextBusy(true);
+    try {
+      const result = await invoke<string>("translate_text_tool", { text: sourceText });
+      setTranslatedText(result);
+    } catch (e) {
+      setToolMsg(`处理失败: ${e}`);
+    } finally {
+      setTextBusy(false);
+    }
+  }
+
+  return (
+    <div className="tool-page">
+      <Card>
+        <CardHeader>
+          <CardTitle>文本翻译</CardTitle>
+          <CardDescription>粘贴英文内容，快速翻译成中文。</CardDescription>
+        </CardHeader>
+        <CardContent className="tool-stack">
+          <textarea
+            className="tool-textarea"
+            value={sourceText}
+            onChange={(e) => setSourceText(e.target.value)}
+            placeholder="在这里粘贴要翻译的英文文本"
+          />
+          <div className="tool-actions">
+            <Button onClick={runTextTranslate} disabled={!configured || textBusy}>
+              {textBusy ? "翻译中" : "翻译文本"}
+            </Button>
+            <Button variant="outline" onClick={() => {
+              setSourceText("");
+              setTranslatedText("");
+              setToolMsg("");
+            }}>
+              清空
+            </Button>
+          </div>
+          {translatedText && (
+            <div className="tool-output">
+              <p className="tool-output-title">译文</p>
+              <p>{translatedText}</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {!configured && (
+        <p className="console-message error">请先在设置中填写访问密钥。</p>
+      )}
+      {toolMsg && <p className={`console-message ${toolMsg.startsWith("处理失败") ? "error" : ""}`}>{toolMsg}</p>}
+    </div>
+  );
+}
+
+function AudioToolView({ configured }: { configured: boolean }) {
+  const [audioBusy, setAudioBusy] = useState(false);
+  const [audioTranslate, setAudioTranslate] = useState(true);
+  const [audioFileName, setAudioFileName] = useState("");
+  const [audioResult, setAudioResult] = useState<AudioToolResult | null>(null);
+  const [toolMsg, setToolMsg] = useState("");
+
+  async function runAudioTool(file: File | null) {
+    setToolMsg("");
+    setAudioResult(null);
+    if (!file) return;
+    if (!file.type.startsWith("audio/")) {
+      setToolMsg("请选择音频文件");
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      setToolMsg("文件过大，请选择 25MB 以内的音频文件");
+      return;
+    }
+    setAudioBusy(true);
+    setAudioFileName(file.name);
+    try {
+      const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
+      const result = await invoke<AudioToolResult>("process_audio_tool", {
+        request: {
+          fileName: file.name,
+          mimeType: file.type || "audio/wav",
+          bytes,
+          translate: audioTranslate,
+        },
+      });
+      setAudioResult(result);
+    } catch (e) {
+      setToolMsg(`处理失败: ${e}`);
+    } finally {
+      setAudioBusy(false);
+    }
+  }
+
+  return (
+    <div className="tool-page">
+      <Card>
+        <CardHeader>
+          <CardTitle>音频转文字</CardTitle>
+          <CardDescription>上传音频文件，提取文字，也可以同时翻译。</CardDescription>
+        </CardHeader>
+        <CardContent className="tool-stack">
+          <label className="upload-box">
+            <FileAudioIcon />
+            <span>{audioFileName || "选择音频文件"}</span>
+            <small>支持常见音频格式，单个文件不超过 25MB。</small>
+            <input
+              type="file"
+              accept="audio/*"
+              disabled={!configured || audioBusy}
+              onChange={(e) => runAudioTool(e.target.files?.[0] || null)}
+            />
+          </label>
+          <div className="switch-row compact">
+            <div>
+              <p>同时翻译</p>
+              <span>开启后会输出原文和中文译文。</span>
+            </div>
+            <Switch checked={audioTranslate} onCheckedChange={(checked) => setAudioTranslate(Boolean(checked))} />
+          </div>
+          {audioBusy && <p className="muted">正在处理音频，请稍等。</p>}
+          {audioResult && (
+            <div className="tool-output">
+              <p className="tool-output-title">原文</p>
+              <p>{audioResult.original}</p>
+              {audioResult.translated && (
+                <>
+                  <p className="tool-output-title">译文</p>
+                  <p>{audioResult.translated}</p>
+                </>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {!configured && (
+        <p className="console-message error">请先在设置中填写访问密钥。</p>
+      )}
+      {toolMsg && <p className={`console-message ${toolMsg.startsWith("处理失败") ? "error" : ""}`}>{toolMsg}</p>}
+    </div>
+  );
+}
+
 function SettingsView({
   config,
   saving,
@@ -327,54 +566,67 @@ function SettingsView({
   onSave: () => void;
 }) {
   return (
-    <div className="settings-grid">
-      <Card>
-        <CardHeader>
-          <CardTitle>服务连接</CardTitle>
-          <CardDescription>需要填写两个密钥：一个把声音转成文字，一个把文字翻译成中文。</CardDescription>
-        </CardHeader>
-        <CardContent className="form-grid">
-          <label className="field">
-            <span>语音识别服务</span>
-            <select value={config.asrProvider} onChange={(e) => onChange("asrProvider", e.target.value)}>
-              <option value="zhipu_glm_asr">智谱 GLM-ASR</option>
-            </select>
-            <small>用于识别系统声音里的英文内容。</small>
-          </label>
-          <label className="field">
-            <span>智谱 API Key</span>
-            <Input
-              type="password"
-              value={config.asrApiKey}
-              onChange={(e) => onChange("asrApiKey", e.target.value)}
-              placeholder="填入智谱开放平台的 API Key"
-            />
-          </label>
-          <label className="field">
-            <span>翻译服务</span>
-            <select value={config.llmProvider} onChange={(e) => onChange("llmProvider", e.target.value)}>
-              <option value="deepseek_v4_flash">DeepSeek</option>
-            </select>
-            <small>用于把识别出的英文翻译成中文。</small>
-          </label>
-          <label className="field">
-            <span>DeepSeek API Key</span>
-            <Input
-              type="password"
-              value={config.llmApiKey}
-              onChange={(e) => onChange("llmApiKey", e.target.value)}
-              placeholder="填入 DeepSeek 平台的 API Key"
-            />
-          </label>
-        </CardContent>
-      </Card>
+    <div className="settings-page">
+      <div className="settings-savebar">
+        <div>
+          <p>设置</p>
+          <span>修改服务连接或字幕显示后，点击右侧按钮保存。</span>
+        </div>
+        <Button onClick={onSave} disabled={saving}>
+          <KeyRoundIcon data-icon="inline-start" />
+          {saving ? "保存中" : "保存设置"}
+        </Button>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>字幕显示</CardTitle>
-          <CardDescription>调整字幕的显示方式和阅读时间。</CardDescription>
-        </CardHeader>
-        <CardContent className="form-grid">
+      <div className="settings-grid">
+        <Card>
+          <CardHeader>
+            <CardTitle>服务连接</CardTitle>
+            <CardDescription>需要填写两个密钥：一个把声音转成文字，一个把文字翻译成中文。</CardDescription>
+          </CardHeader>
+          <CardContent className="form-grid">
+            <label className="field">
+              <span>语音识别服务</span>
+              <select value={config.asrProvider} onChange={(e) => onChange("asrProvider", e.target.value)}>
+                <option value="zhipu_glm_asr">智谱 GLM-ASR</option>
+              </select>
+              <small>用于识别系统声音里的英文内容。</small>
+            </label>
+            <label className="field">
+              <span>智谱 API Key</span>
+              <Input
+                type="password"
+                value={config.asrApiKey}
+                onChange={(e) => onChange("asrApiKey", e.target.value)}
+                placeholder="填入智谱开放平台的 API Key"
+              />
+            </label>
+            <label className="field">
+              <span>翻译服务</span>
+              <select value={config.llmProvider} onChange={(e) => onChange("llmProvider", e.target.value)}>
+                <option value="deepseek_v4_flash">DeepSeek</option>
+              </select>
+              <small>用于把识别出的英文翻译成中文。</small>
+            </label>
+            <label className="field">
+              <span>DeepSeek API Key</span>
+              <Input
+                type="password"
+                value={config.llmApiKey}
+                onChange={(e) => onChange("llmApiKey", e.target.value)}
+                placeholder="填入 DeepSeek 平台的 API Key"
+              />
+            </label>
+            <p className="save-hint">填写或更换密钥后，需要保存设置才会生效。</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>字幕显示</CardTitle>
+            <CardDescription>调整字幕的显示方式和阅读时间。</CardDescription>
+          </CardHeader>
+          <CardContent className="form-grid">
           <label className="field">
             <span>显示模式</span>
             <select value={config.subtitleMode} onChange={(e) => onChange("subtitleMode", e.target.value)}>
@@ -418,12 +670,9 @@ function SettingsView({
             </div>
             <Switch checked={config.saveHistory} onCheckedChange={(checked) => onChange("saveHistory", Boolean(checked))} />
           </div>
-          <Button onClick={onSave} disabled={saving}>
-            <KeyRoundIcon data-icon="inline-start" />
-            {saving ? "保存中" : "保存设置"}
-          </Button>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

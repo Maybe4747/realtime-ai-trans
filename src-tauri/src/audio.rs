@@ -6,7 +6,8 @@ use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 
 use screencapturekit::prelude::*;
-use tauri::AppHandle;
+use serde::Serialize;
+use tauri::{AppHandle, Emitter};
 
 use crate::asr;
 use crate::db;
@@ -117,6 +118,27 @@ impl SCStreamOutputTrait for Capture {
 
 static STREAM: Mutex<Option<SCStream>> = Mutex::new(None);
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CaptureStateEvent {
+    running: bool,
+    message: String,
+}
+
+pub fn is_running() -> bool {
+    STREAM.lock().unwrap().is_some()
+}
+
+pub fn emit_capture_state(app: &AppHandle, message: impl Into<String>) {
+    let _ = app.emit(
+        "capture_state",
+        CaptureStateEvent {
+            running: is_running(),
+            message: message.into(),
+        },
+    );
+}
+
 /// 开始同传:采集→VAD→ASR→翻译。需先在设置中配置 provider key 与屏幕录制权限。
 #[tauri::command]
 pub fn start_capture(app: AppHandle) -> Result<(), String> {
@@ -220,15 +242,17 @@ pub fn start_capture(app: AppHandle) -> Result<(), String> {
         .map_err(|e| format!("启动采集失败(检查屏幕录制权限): {e:?}"))?;
 
     *guard = Some(stream);
+    emit_capture_state(&app, "正在同传系统音频");
     Ok(())
 }
 
 /// 停止同传。drop stream → drop handler → drop tx → 处理线程退出。
 #[tauri::command]
-pub fn stop_capture() -> Result<(), String> {
+pub fn stop_capture(app: AppHandle) -> Result<(), String> {
     let stream = STREAM.lock().unwrap().take().ok_or("当前未在运行")?;
     stream
         .stop_capture()
         .map_err(|e| format!("停止采集失败: {e:?}"))?;
+    emit_capture_state(&app, "已停止");
     Ok(())
 }
