@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LUMEN · 实时同传字幕</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Spline+Sans+Mono:wght@400;500;600&family=Noto+Serif+SC:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#0b0a08;
+    --bg-2:#15110b;
+    --ink:#f5eee1;
+    --ink-dim:#a59b89;
+    --ink-faint:#5d564a;
+    --gold:#f1c87b;
+    --gold-soft:#e6b56a;
+    --gold-deep:#b9863c;
+    --glass:rgba(22,18,13,.66);
+    --rim:rgba(241,200,123,.16);
+    --scrim:rgba(8,7,5,.0);
+    --ok:#9bd0a0;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"Spline Sans Mono",ui-monospace,monospace;
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+    cursor:default;
+  }
+
+  /* ---------- atmosphere ---------- */
+  .grain{
+    position:fixed;inset:0;z-index:60;pointer-events:none;
+    opacity:.05;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* ---------- the video scene ---------- */
+  .stage{
+    position:fixed;inset:0;overflow:hidden;
+    background:
+      radial-gradient(120% 90% at 50% 30%, #20180f 0%, #0d0a07 55%, #070605 100%);
+    animation:stageIn 1.6s cubic-bezier(.2,.7,.2,1) both;
+  }
+  @keyframes stageIn{from{opacity:0;transform:scale(1.04)}to{opacity:1;transform:none}}
+
+  /* projected slide glow */
+  .screen{
+    position:absolute;left:50%;top:34%;transform:translate(-50%,-50%);
+    width:min(58vw,860px);aspect-ratio:16/9;
+    border-radius:14px;
+    background:
+      linear-gradient(150deg, rgba(53,40,24,.55), rgba(20,15,9,.4));
+    box-shadow:
+      0 0 140px 40px rgba(233,170,80,.10),
+      0 40px 120px rgba(0,0,0,.55),
+      inset 0 1px 0 rgba(255,225,170,.05);
+    overflow:hidden;
+    animation:floatSlow 14s ease-in-out infinite;
+  }
+  .screen::after{ /* light sweep */
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(115deg,transparent 30%,rgba(255,221,160,.06) 50%,transparent 70%);
+    transform:translateX(-30%);
+    animation:sweep 9s ease-in-out infinite;
+  }
+  @keyframes sweep{0%,100%{transform:translateX(-35%)}50%{transform:translateX(35%)}}
+  @keyframes floatSlow{0%,100%{transform:translate(-50%,-50%)}50%{transform:translate(-50%,calc(-50% - 10px))}}
+
+  .slide-kicker{
+    position:absolute;top:13%;left:9%;
+    font-size:.66rem;letter-spacing:.42em;color:var(--gold-soft);opacity:.5;
+  }
+  .slide-title{
+    position:absolute;top:30%;left:8%;right:8%;
+    font-family:"Fraunces",serif;font-weight:400;font-style:italic;
+    font-size:clamp(1.6rem,3.4vw,3rem);line-height:1.02;
+    color:rgba(245,238,225,.5);
+    letter-spacing:-.01em;
+  }
+  .slide-title b{color:rgba(241,200,123,.62);font-style:normal;font-weight:500}
+  .chips{position:absolute;bottom:15%;left:8.5%;display:flex;gap:14px}
+  .chip{
+    font-size:.7rem;letter-spacing:.18em;color:rgba(165,155,137,.55);
+    padding:5px 13px;border:1px solid rgba(241,200,123,.14);border-radius:999px;
+  }
+  .chip.lit{color:rgba(241,200,123,.8);border-color:rgba(241,200,123,.34);
+    box-shadow:0 0 22px rgba(233,170,80,.12)}
+
+  /* speaker ambient haze + dust */
+  .haze{position:absolute;left:50%;bottom:-12%;transform:translateX(-50%);
+    width:80vw;height:46vh;border-radius:50%;
+    background:radial-gradient(closest-side, rgba(233,170,80,.10), transparent 72%);
+    filter:blur(8px);pointer-events:none}
+  .dust{position:absolute;inset:0;pointer-events:none;opacity:.5}
+  .dust i{position:absolute;width:2px;height:2px;border-radius:50%;
+    background:rgba(255,221,160,.6);box-shadow:0 0 6px rgba(255,221,160,.5);
+    animation:rise linear infinite}
+  @keyframes rise{from{transform:translateY(0);opacity:0}
+    10%{opacity:.8}90%{opacity:.7}to{transform:translateY(-90vh);opacity:0}}
+
+  /* video chrome */
+  .v-meta{
+    position:absolute;top:34px;left:40px;right:40px;
+    display:flex;justify-content:space-between;align-items:flex-start;
+    animation:metaFade 1s ease 2.4s both;
+  }
+  @keyframes metaFade{from{opacity:.85}to{opacity:.32}}
+  .v-title{font-family:"Fraunces",serif;font-size:1.18rem;font-weight:500;
+    color:var(--ink);letter-spacing:.01em}
+  .v-sub{font-size:.72rem;color:var(--ink-dim);margin-top:5px;letter-spacing:.04em}
+  .v-live{display:flex;align-items:center;gap:8px;font-size:.68rem;
+    letter-spacing:.22em;color:var(--ink-dim)}
+  .v-live::before{content:"";width:7px;height:7px;border-radius:50%;
+    background:var(--gold);box-shadow:0 0 12px var(--gold);animation:blink 2s infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+
+  .scrub{position:absolute;left:40px;right:40px;bottom:26px;
+    display:flex;align-items:center;gap:16px;
+    animation:metaFade 1s ease 2.4s both}
+  .track{flex:1;height:3px;border-radius:2px;background:rgba(245,238,225,.12);position:relative}
+  .track::before{content:"";position:absolute;left:0;top:0;bottom:0;width:39%;
+    border-radius:2px;background:linear-gradient(90deg,var(--gold-deep),var(--gold));
+    box-shadow:0 0 12px rgba(241,200,123,.5)}
+  .track::after{content:"";position:absolute;left:39%;top:50%;transform:translate(-50%,-50%);
+    width:11px;height:11px;border-radius:50%;background:var(--gold);
+    box-shadow:0 0 14px rgba(241,200,123,.7)}
+  .time{font-size:.7rem;color:var(--ink-dim);letter-spacing:.08em}
+
+  /* ---------- floating control window ---------- */
+  .control{
+    position:fixed;top:30px;left:30px;z-index:40;width:286px;
+    background:var(--glass);
+    backdrop-filter:blur(26px) saturate(1.2);-webkit-backdrop-filter:blur(26px) saturate(1.2);
+    border:1px solid var(--rim);border-radius:20px;
+    box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 0 1px rgba(0,0,0,.3),
+      inset 0 1px 0 rgba(255,235,200,.06);
+    padding:18px 18px 20px;
+    animation:ctrlIn 1s cubic-bezier(.2,.8,.2,1) .4s both;
+  }
+  @keyframes ctrlIn{from{opacity:0;transform:translateX(-22px)}to{opacity:1;transform:none}}
+
+  .c-head{display:flex;align-items:center;gap:11px}
+  .dot{display:flex;gap:6px;margin-left:auto;opacity:.5}
+  .dot i{width:9px;height:9px;border-radius:50%;background:rgba(165,155,137,.35)}
+  .sigil{width:26px;height:26px;border-radius:8px;position:relative;flex:none;
+    background:radial-gradient(circle at 50% 45%,#fbe1a6,#e6b56a 45%,#8a5e25 100%);
+    box-shadow:0 0 18px rgba(241,200,123,.55),inset 0 0 6px rgba(255,255,255,.4)}
+  .sigil::after{content:"";position:absolute;inset:-5px;border-radius:12px;
+    border:1px solid rgba(241,200,123,.25);animation:halo 3s ease-in-out infinite}
+  @keyframes halo{0%,100%{transform:scale(1);opacity:.5}50%{transform:scale(1.15);opacity:.1}}
+  .wordmark{font-family:"Fraunces",serif;font-size:1.18rem;font-weight:600;letter-spacing:.16em}
+  .tag{font-size:.6rem;color:var(--ink-dim);letter-spacing:.26em;margin-top:1px}
+
+  .langpair{display:flex;align-items:center;gap:10px;margin:18px 0 14px;
+    font-size:.82rem;letter-spacing:.06em}
+  .langpair b{color:var(--ink);font-weight:500}
+  .langpair .ar{flex:1;height:1px;background:linear-gradient(90deg,
+    rgba(241,200,123,.05),rgba(241,200,123,.4),rgba(241,200,123,.05));position:relative}
+  .langpair .ar::after{content:"▸";position:absolute;right:-2px;top:-9px;color:var(--gold);font-size:.7rem}
+  .langpair .en{color:var(--ink-dim)}
+
+  /* waveform */
+  .wave{height:46px;display:flex;align-items:center;justify-content:center;gap:3px;
+    padding:0 4px;margin-bottom:4px}
+  .wave b{width:3px;height:6px;border-radius:2px;
+    background:linear-gradient(var(--gold),var(--gold-deep));
+    transform-origin:center;opacity:.85;
+    animation:bounce var(--d) ease-in-out var(--g) infinite}
+  @keyframes bounce{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(var(--h))}}
+  .wave.silent b{animation-play-state:paused;transform:scaleY(.18);
+    background:rgba(165,155,137,.3);transition:transform .5s ease}
+
+  .status{display:flex;align-items:center;gap:9px;font-size:.78rem;
+    color:var(--ink-dim);letter-spacing:.04em;min-height:20px;margin-top:6px}
+  .status .sd{width:8px;height:8px;border-radius:50%;background:var(--ink-faint);flex:none;
+    transition:.3s}
+  .status[data-s="listen"] .sd{background:var(--gold-soft);box-shadow:0 0 10px var(--gold-soft)}
+  .status[data-s="asr"] .sd{background:var(--gold);box-shadow:0 0 12px var(--gold)}
+  .status[data-s="tr"] .sd{background:var(--gold);box-shadow:0 0 14px var(--gold);
+    animation:pulse 1s infinite}
+  .status[data-s="skip"] .sd{background:#7d7569}
+  .status[data-s="done"] .sd{background:var(--ok);box-shadow:0 0 10px rgba(155,208,160,.5)}
+  @keyframes pulse{50%{opacity:.35}}
+
+  .stats{display:flex;gap:10px;margin-top:16px}
+  .stat{flex:1;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.04);
+    border-radius:12px;padding:9px 11px}
+  .stat .n{font-family:"Fraunces",serif;font-size:1.4rem;font-weight:500;color:var(--ink);
+    line-height:1}
+  .stat .n b{color:var(--gold);font-weight:500}
+  .stat .l{font-size:.58rem;color:var(--ink-dim);letter-spacing:.12em;margin-top:5px}
+
+  .btn{margin-top:16px;width:100%;border:none;cursor:pointer;
+    font-family:"Spline Sans Mono",monospace;font-size:.82rem;letter-spacing:.08em;
+    color:#1a1206;font-weight:600;padding:13px;border-radius:13px;
+    background:linear-gradient(135deg,#fbe1a6,#e6b56a);
+    box-shadow:0 8px 26px rgba(233,170,80,.3),inset 0 1px 0 rgba(255,255,255,.5);
+    transition:transform .15s,box-shadow .2s}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 12px 32px rgba(233,170,80,.42)}
+  .btn:active{transform:translateY(0)}
+  .modes{display:flex;gap:0;margin-top:13px;background:rgba(255,255,255,.03);
+    border-radius:10px;padding:3px}
+  .modes button{flex:1;border:none;background:none;cursor:pointer;
+    font-family:inherit;font-size:.72rem;letter-spacing:.06em;color:var(--ink-dim);
+    padding:7px;border-radius:8px;transition:.2s}
+  .modes button.on{background:rgba(241,200,123,.14);color:var(--gold)}
+
+  /* ---------- subtitle bar (HERO) ---------- */
+  .subs{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);z-index:30;
+    width:min(86vw,1080px);text-align:center;
+    animation:subsIn 1.1s cubic-bezier(.2,.8,.2,1) .8s both}
+  @keyframes subsIn{from{opacity:0;transform:translate(-50%,26px)}to{opacity:1;transform:translateX(-50%)}}
+  .subs::before{ /* soft readability scrim, no hard lines */
+    content:"";position:absolute;inset:-40px -80px;z-index:-1;
+    background:radial-gradient(60% 120% at 50% 60%,rgba(6,5,4,.72),transparent 75%);
+    filter:blur(6px)}
+
+  .ctx{font-family:"Noto Serif SC",serif;font-size:1.02rem;font-weight:300;
+    color:rgba(165,155,137,.5);letter-spacing:.02em;margin-bottom:14px;
+    min-height:1.3em;transition:.4s;opacity:0}
+  .ctx.show{opacity:1}
+
+  .en-line{font-family:"Spline Sans Mono",monospace;font-size:1.04rem;
+    color:var(--ink-dim);letter-spacing:.01em;min-height:1.5em;margin-bottom:12px;
+    text-shadow:0 2px 18px rgba(0,0,0,.7)}
+  .en-line .w{opacity:0;filter:blur(4px);display:inline-block;
+    transition:opacity .26s ease,filter .26s ease;margin-right:.32em}
+  .en-line .w.on{opacity:1;filter:none}
+  .caret{display:inline-block;width:.5em;height:1.05em;vertical-align:-.16em;
+    background:var(--gold);border-radius:1px;opacity:.85;
+    animation:caret .9s steps(1) infinite;box-shadow:0 0 10px var(--gold)}
+  @keyframes caret{50%{opacity:0}}
+
+  .zh-line{font-family:"Noto Serif SC",serif;font-weight:400;
+    font-size:clamp(1.7rem,3.4vw,2.55rem);line-height:1.28;color:var(--ink);
+    letter-spacing:.02em;min-height:1.4em;
+    text-shadow:0 2px 30px rgba(0,0,0,.8),0 0 50px rgba(0,0,0,.5);
+    opacity:0;transform:translateY(8px);transition:opacity .5s,transform .5s}
+  .zh-line.show{opacity:1;transform:none}
+
+  /* preserved term */
+  .term{color:var(--gold);font-style:normal;
+    font-family:"Spline Sans Mono",monospace;font-size:.86em;font-weight:500;
+    letter-spacing:0;padding:0 .04em}
+  .en-line .term{color:var(--gold-soft);font-size:1em}
+  .term.star{position:relative}
+  .term.star.flash{animation:termFlash 1.4s ease}
+  @keyframes termFlash{0%{color:#fff;text-shadow:0 0 26px var(--gold)}
+    100%{color:var(--gold);text-shadow:none}}
+  .term.star::after{content:"原文保留";position:absolute;left:50%;top:-1.55em;
+    transform:translateX(-50%) translateY(4px);
+    font-family:"Spline Sans Mono",monospace;font-size:.34em;letter-spacing:.2em;
+    color:var(--gold-soft);white-space:nowrap;background:rgba(20,15,9,.85);
+    padding:3px 8px;border-radius:6px;border:1px solid rgba(241,200,123,.25);
+    opacity:0;pointer-events:none;transition:.4s}
+  .term.star.label::after{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* click-through hint toast */
+  .hint{position:fixed;left:50%;bottom:34px;transform:translateX(-50%);z-index:31;
+    font-size:.68rem;letter-spacing:.16em;color:var(--ink-dim);
+    display:flex;align-items:center;gap:9px;
+    background:rgba(20,15,9,.6);backdrop-filter:blur(12px);
+    padding:8px 16px;border-radius:999px;border:1px solid rgba(241,200,123,.12);
+    animation:hintCycle 9s ease 2.2s both}
+  .hint svg{width:13px;height:13px;stroke:var(--gold-soft);fill:none;stroke-width:1.6}
+  @keyframes hintCycle{0%{opacity:0;transform:translate(-50%,10px)}
+    12%,72%{opacity:1;transform:translateX(-50%)}100%{opacity:0;transform:translate(-50%,8px)}}
+
+  .credit{position:fixed;right:22px;bottom:16px;z-index:40;
+    font-size:.58rem;letter-spacing:.22em;color:var(--ink-faint)}
+</style>
+</head>
+<body>
+  <div class="grain"></div>
+
+  <!-- ===== video scene ===== -->
+  <div class="stage">
+    <div class="screen">
+      <div class="slide-kicker">RUNTIMES · 2026</div>
+      <div class="slide-title">JavaScript,<br><b>faster.</b></div>
+      <div class="chips">
+        <span class="chip lit" id="chipBun">Bun</span>
+        <span class="chip">Node</span>
+        <span class="chip">Deno</span>
+      </div>
+    </div>
+    <div class="haze"></div>
+    <div class="dust" id="dust"></div>
+
+    <div class="v-meta">
+      <div>
+        <div class="v-title">Bun in 100 Seconds — Full-stack JS, reimagined</div>
+        <div class="v-sub">Fireship · 2.1M views · 学习 · 英语原声</div>
+      </div>
+      <div class="v-live">LIVE 同传</div>
+    </div>
+
+    <div class="scrub">
+      <span class="time">07:12</span>
+      <div class="track"></div>
+      <span class="time">18:40</span>
+    </div>
+  </div>
+
+  <!-- ===== floating control window ===== -->
+  <section class="control">
+    <div class="c-head">
+      <div class="sigil"></div>
+      <div>
+        <div class="wordmark">LUMEN</div>
+        <div class="tag">实时同传字幕</div>
+      </div>
+      <div class="dot"><i></i><i></i><i></i></div>
+    </div>
+
+    <div class="langpair">
+      <span class="en">English</span>
+      <span class="ar"></span>
+      <b>简体中文</b>
+    </div>
+
+    <div class="wave" id="wave"></div>
+
+    <div class="status" id="status" data-s="listen">
+      <span class="sd"></span><span id="statusText">聆听系统声音…</span>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="n" id="nSent">0</div><div class="l">已同传 · 句</div></div>
+      <div class="stat"><div class="n"><b id="nSaved">12</b></div><div class="l">静音过滤 · 省请求</div></div>
+    </div>
+
+    <button class="btn" id="btn">⏸  暂停同传</button>
+
+    <div class="modes">
+      <button class="on">双语对照</button>
+      <button>仅译文</button>
+    </div>
+  </section>
+
+  <!-- ===== subtitle bar (hero) ===== -->
+  <section class="subs">
+    <div class="ctx" id="ctx"></div>
+    <div class="en-line" id="enLine"></div>
+    <div class="zh-line" id="zhLine"></div>
+  </section>
+
+  <!-- click-through hint -->
+  <div class="hint">
+    <svg viewBox="0 0 24 24"><path d="M5 3l14 9-6 1 3 6-3 1-3-6-5 4z"/></svg>
+    字幕已启用鼠标穿透 · 点击视频不受阻
+  </div>
+
+  <div class="credit">PROTOTYPE v0 · 字幕即光</div>
+
+<script>
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+const $ = s => document.querySelector(s);
+
+/* dust particles */
+(function(){
+  const d=$('#dust');let h='';
+  for(let i=0;i<26;i++){
+    const x=Math.random()*100, dur=10+Math.random()*16, del=-Math.random()*20, s=.6+Math.random()*1.2;
+    h+=`<i style="left:${x}%;bottom:-10px;transform:scale(${s});animation-duration:${dur}s;animation-delay:${del}s"></i>`;
+  }
+  d.innerHTML=h;
+})();
+
+/* waveform bars */
+(function(){
+  const w=$('#wave');let h='';
+  for(let i=0;i<30;i++){
+    const dur=(.5+Math.random()*.7).toFixed(2), del=(Math.random()*.8).toFixed(2),
+          hi=(1.4+Math.random()*2.6).toFixed(2);
+    h+=`<b style="--d:${dur}s;--g:${del}s;--h:${hi}"></b>`;
+  }
+  w.innerHTML=h;
+})();
+
+/* ---- script: a tech talk, naturally rich in preserved terms ---- */
+const TERMS=["JavaScript","Bun","Node","Deno","Zig","V8","TypeScript","npm"];
+const STAR="Bun";
+const script=[
+  {t:'speech', en:"So today let's talk about JavaScript runtimes.",
+               zh:"那么今天,我们来聊聊 JavaScript 运行时。"},
+  {t:'silence', label:"已跳过静音 · 未上传", reason:"silence"},
+  {t:'speech', en:"Bun is a fast all-in-one toolkit for JavaScript and TypeScript.",
+               zh:"Bun 是面向 JavaScript 与 TypeScript 的快速一体化工具包。", star:true},
+  {t:'speech', en:"It bundles a runtime, a package manager, and a test runner.",
+               zh:"它把运行时、包管理器和测试运行器集于一身。"},
+  {t:'silence', label:"已跳过纯音乐 · 未上传", reason:"music"},
+  {t:'speech', en:"Under the hood it's written in Zig, not the V8 that Node uses.",
+               zh:"它的底层用 Zig 编写,而非 Node 所用的 V8。"},
+  {t:'speech', en:"And it can install dependencies far faster than npm.",
+               zh:"而且它安装依赖的速度远快于 npm。"},
+];
+
+/* render helpers */
+function cleanTok(t){return t.replace(/[^A-Za-z0-9]/g,'');}
+function isTerm(tok){const c=cleanTok(tok);return TERMS.some(x=>x.toLowerCase()===c.toLowerCase());}
+
+function enTokens(s){
+  return s.split(' ').map(tok=>{
+    const cls = isTerm(tok) ? 'w term' : 'w';
+    return `<span class="${cls}">${tok}</span>`;
+  });
+}
+function renderZh(s, star){
+  const sorted=[...TERMS].sort((a,b)=>b.length-a.length);
+  const re=new RegExp('('+sorted.join('|')+')','g');
+  return s.replace(re, m=>{
+    const isStar = star && m===STAR;
+    return `<span class="term${isStar?' star':''}">${m}</span>`;
+  });
+}
+
+const enLine=$('#enLine'), zhLine=$('#zhLine'), ctx=$('#ctx');
+const statusEl=$('#status'), statusText=$('#statusText'), wave=$('#wave');
+const nSent=$('#nSent'), nSaved=$('#nSaved'), chipBun=$('#chipBun');
+let sent=0, saved=12, lastZh="";
+
+function setStatus(s,txt){statusEl.dataset.s=s;statusText.textContent=txt;}
+
+async function runSpeech(item){
+  // listening
+  wave.classList.remove('silent');
+  setStatus('listen','聆听系统声音…');
+  await sleep(450);
+
+  // ASR streaming, word by word
+  setStatus('asr','识别中 · ASR 流式');
+  const toks=enTokens(item.en);
+  enLine.innerHTML = toks.join('') + '<span class="caret"></span>';
+  const spans=enLine.querySelectorAll('.w');
+  const caret=enLine.querySelector('.caret');
+  for(let i=0;i<spans.length;i++){
+    spans[i].classList.add('on');
+    await sleep(90+Math.random()*120);
+  }
+  caret && caret.remove();
+  await sleep(360); // asr_final settle
+
+  // translating
+  setStatus('tr','翻译中 · GLM-4.7-Flash');
+  await sleep(720);
+  zhLine.innerHTML=renderZh(item.zh, item.star);
+  requestAnimationFrame(()=>zhLine.classList.add('show'));
+
+  // star term flourish
+  if(item.star){
+    const star=zhLine.querySelector('.term.star');
+    if(star){star.classList.add('flash','label');
+      setTimeout(()=>star.classList.remove('label'),2600);}
+    chipBun.classList.add('lit');
+  }
+
+  sent++; nSent.textContent=sent;
+  setStatus('done','本句完成');
+  await sleep(1700);
+
+  // demote current → context
+  lastZh=renderZh(item.zh, false);
+  ctx.innerHTML=lastZh; ctx.classList.add('show');
+  zhLine.classList.remove('show');
+  await sleep(380);
+  enLine.innerHTML=''; zhLine.innerHTML='';
+}
+
+async function runSilence(item){
+  wave.classList.add('silent');
+  setStatus('skip', item.label);
+  // gating: nothing uploaded, save a request
+  saved++; nSaved.textContent=saved;
+  // fade current line out, keep ctx
+  enLine.innerHTML=''; zhLine.classList.remove('show');
+  await sleep(1500);
+  wave.classList.remove('silent');
+}
+
+let paused=false;
+$('#btn').addEventListener('click',function(){
+  paused=!paused;
+  this.textContent = paused ? '▶  继续同传' : '⏸  暂停同传';
+  if(paused){wave.classList.add('silent');setStatus('listen','已暂停');}
+});
+document.querySelectorAll('.modes button').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.modes button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    enLine.style.display = b.textContent.includes('仅译文') ? 'none':'';
+  });
+});
+
+async function loop(){
+  await sleep(2200); // let intro animations breathe
+  let i=0;
+  while(true){
+    if(paused){await sleep(300);continue;}
+    const item=script[i % script.length];
+    if(item.t==='speech') await runSpeech(item);
+    else await runSilence(item);
+    i++;
+  }
+}
+loop();
+</script>
+</body>
+</html>

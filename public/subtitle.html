@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LUMEN 字幕</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Spline+Sans+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;background:transparent;overflow:hidden;user-select:none}
+  body{display:flex;align-items:flex-end;justify-content:center;padding-bottom:18px}
+
+  .bar{max-width:92vw;text-align:center;position:relative;padding:14px 30px;}
+  .bar::before{
+    content:"";position:absolute;inset:-30px -60px;z-index:-1;
+    background:radial-gradient(60% 130% at 50% 60%, rgba(6,5,4,.74), transparent 75%);
+    filter:blur(6px);
+  }
+
+  /* 英文(上行,小,暗,机器转录感) */
+  .en{
+    font-family:"Spline Sans Mono",monospace;font-size:1.04rem;
+    color:#a59b89;letter-spacing:.01em;margin-bottom:10px;min-height:1.4em;
+    text-shadow:0 2px 16px rgba(0,0,0,.8);
+  }
+  .en.partial{color:#8f857a}
+  .en .term{color:#e6b56a}
+  .caret{display:inline-block;width:.46em;height:1em;vertical-align:-.12em;margin-left:.04em;
+    background:#f1c87b;border-radius:1px;animation:blink .9s steps(1) infinite;box-shadow:0 0 8px #f1c87b}
+  @keyframes blink{50%{opacity:0}}
+
+  /* 中文(下行,大,亮,译文是主角) */
+  .zh{
+    font-family:"Noto Serif SC",serif;font-weight:400;
+    font-size:clamp(1.7rem,3.2vw,2.5rem);line-height:1.3;color:#f5eee1;
+    letter-spacing:.02em;min-height:1.4em;
+    text-shadow:0 2px 30px rgba(0,0,0,.9),0 0 50px rgba(0,0,0,.5);
+  }
+  .zh .term{color:#f1c87b;font-family:"Spline Sans Mono",monospace;font-size:.86em;font-weight:500}
+  .zh .dots{color:#e6b56a;animation:blink 1s steps(1) infinite}
+  .err{color:#d98a7a;font-size:.9rem;font-family:"Spline Sans Mono",monospace}
+
+  .idle{font-family:"Spline Sans Mono",monospace;font-size:.8rem;letter-spacing:.22em;
+    color:rgba(165,155,137,.4);display:flex;align-items:center;gap:9px;justify-content:center}
+  .idle::before{content:"";width:7px;height:7px;border-radius:50%;
+    background:#e6b56a;box-shadow:0 0 12px #e6b56a;animation:blink 2s infinite}
+</style>
+</head>
+<body>
+  <div class="bar">
+    <div class="en" id="en"></div>
+    <div class="zh" id="zh"><span class="idle">LUMEN · 聆听系统声音…</span></div>
+  </div>
+
+<script>
+  const enEl = document.getElementById("en");
+  const zhEl = document.getElementById("zh");
+  let curId = -1;
+
+  // 把中文里的英文术语(连续 ASCII 词)高亮为金色,无需术语表(design §5.4 L1)
+  function hl(text) {
+    const esc = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return esc.replace(/[A-Za-z][A-Za-z0-9.+#_-]*/g, (m) => `<span class="term">${m}</span>`);
+  }
+
+  function onSubtitle(p) {
+    const { id, original, translated, status } = p;
+    if (status === "error") {
+      enEl.innerHTML = "";
+      zhEl.innerHTML = `<span class="err">${original} ${translated}</span>`;
+      return;
+    }
+    curId = id;
+    // 英文行
+    const enPartial = status === "asr_partial";
+    enEl.className = enPartial ? "en partial" : "en";
+    enEl.innerHTML = hl(original) + (enPartial ? '<span class="caret"></span>' : "");
+    // 中文行
+    if (status === "translating" || status === "done") {
+      zhEl.innerHTML = hl(translated) + (status === "translating" ? '<span class="dots">▋</span>' : "");
+    } else if (status === "asr_final") {
+      zhEl.innerHTML = '<span class="dots">翻译中…</span>';
+    } else {
+      // 英文流式阶段:中文行留空,等整句定稿
+      zhEl.innerHTML = "";
+    }
+  }
+
+  function bind() {
+    if (window.__TAURI__ && window.__TAURI__.event) {
+      window.__TAURI__.event.listen("subtitle", (e) => onSubtitle(e.payload));
+    } else {
+      setTimeout(bind, 80);
+    }
+  }
+  bind();
+</script>
+</body>
+</html>

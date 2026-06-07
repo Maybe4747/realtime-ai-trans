@@ -12,14 +12,33 @@
   "app": {
     "windows": [
       {
-        "title": "demo",
-        "width": 800,
-        "height": 600
+        "label": "main",
+        "title": "LUMEN · 控制台",
+        "width": 360,
+        "height": 600,
+        "resizable": true
+      },
+      {
+        "label": "subtitle",
+        "url": "/subtitle.html",
+        "width": 1080,
+        "height": 200,
+        "x": 200,
+        "y": 760,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "shadow": false,
+        "skipTaskbar": true,
+        "focus": false,
+        "resizable": false
       }
     ],
     "security": {
       "csp": null
-    }
+    },
+    "macOSPrivateApi": true,
+    "withGlobalTauri": true
   },
   "bundle": {
     "active": true,

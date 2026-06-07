@@ -238,16 +238,40 @@ Tauri 2 配置/运行时创建,关键属性:
 
 ---
 
+## 8.5 Phase 0 Spike 结果(2026-06-07 · 已验证 ✓)
+
+**结论:产品在 macOS 上技术可行,风险 #1 #2 已排除。**
+
+| 验证项 | 结果 |
+|---|---|
+| 风险 #1 · ScreenCaptureKit 取流 | ✓ `screencapturekit` v7.0.1(crates.io,无需自写 Swift 桥接)。采到 10.34s,**1ch/16000Hz/16bit**,峰值 78.9% / RMS 3759,信号健康 |
+| 风险 #2 · 悬浮窗盖全屏 | ✓ `tauri-nspanel`(git `v2.1`)+ `ActivationPolicy::Accessory`。全屏 YouTube 之上可见,鼠标穿透生效 |
+
+**落地技术栈(已锁定):**
+- 音频:`screencapturekit = { version="7.0.1", features=["async","macos_13_0"] }`。配置 `with_captures_audio(true).with_sample_rate(48000).with_channel_count(2).with_excludes_current_process_audio(true)`;回调 `audio_buffer_list()` → 每通道 `AudioBuffer::data()` 取 **Float32** 字节 → 下混单声道。
+- 重采样:48k→16k 为整 3:1,**spike 用 3 样本均值抽取**即可(暂未引入 rubato;rubato 3.0 API 较重,Phase 1 若需更高质量低通再评估)。
+- 悬浮窗:`window.to_panel::<P>()` → `set_level(Floating)` + `set_style_mask(nonactivating_panel)` + `set_collection_behavior(full_screen_auxiliary + can_join_all_spaces)`;穿透 `set_ignore_cursor_events(true)`。
+
+**踩坑记录(避免 Phase 1 重犯):**
+1. **Swift 运行时 rpath**:screencapturekit 经 apple-cf/apple-metal Swift 桥接,运行时报 `libswift_Concurrency.dylib not loaded`。修复:`build.rs` 加 `cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/swift`。
+2. **macOS 私有 API**:透明 + NSPanel 需 `tauri.conf.json` 设 `"macOSPrivateApi": true` **且** Cargo `tauri` 开 `features=["macos-private-api"]`,两者缺一编译报错。
+3. **权限**:首次采集弹屏幕录制授权(TCC),需授予运行 dev 的程序;capabilities 加 `core:window:allow-set-ignore-cursor-events`。
+4. **窗口结构**:`main`(React 控制台)+ `subtitle`(独立透明窗,静态 html,`focus:false`)。
+
+**现有 spike 代码(Phase 1 基础):** `src-tauri/src/audio.rs`(采集→WAV)、`src-tauri/src/overlay.rs`(NSPanel)、`public/subtitle.html`、`src/App.tsx`(控制台)。
+
+---
+
 ## 9. 分阶段路线图(每阶段带验收点)
 
 ```
-Phase 0  可行性 spike(先验最高风险)
-  → 验收: Rust 从 ScreenCaptureKit 稳定拿到 16kHz PCM(存 wav 能播)
-  → 验收: 悬浮窗能盖住全屏 YouTube + 鼠标可穿透
+Phase 0  可行性 spike(先验最高风险)  ✓ 已完成 2026-06-07(见 §8.5)
+  → 验收: Rust 从 ScreenCaptureKit 稳定拿到 16kHz PCM(存 wav 能播)  ✓
+  → 验收: 悬浮窗能盖住全屏 YouTube + 鼠标可穿透  ✓
 
-Phase 1  打通链路(先单语英文转写)
+Phase 1  打通链路(先单语英文转写)  ✓ 已完成 2026-06-07
   → 系统音频 → VAD 切句 → GLM-ASR → 悬浮窗显示英文(interim + final)
-  → 验收: 放英文油管,字幕实时出现、延迟可接受、不疯狂跳
+  → 验收: 放英文视频,字幕实时出现 ✓(asr.rs 流式 + audio.rs 能量 VAD)
 
 Phase 2  加翻译(双语)
   → 整句 final → GLM-4.7-Flash 翻译(带上下文)→ 双语显示

@@ -1,14 +1,26 @@
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
+mod asr;
+mod audio;
+mod overlay;
+mod translate;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet])
+        .plugin(tauri_nspanel::init())
+        .setup(|app| {
+            // Accessory:隐藏 Dock 图标,配合 NSPanel 浮于全屏之上
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            if let Err(e) = overlay::setup_overlay(app.handle()) {
+                eprintln!("[overlay] 初始化失败: {e}");
+            }
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            audio::start_capture,
+            audio::stop_capture,
+            overlay::set_subtitle_click_through,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
