@@ -57,12 +57,108 @@
 <script>
   const enEl = document.getElementById("en");
   const zhEl = document.getElementById("zh");
-  let curId = -1;
+  const MIN_DWELL_MS = 1800;
+  const MAX_DWELL_MS = 4200;
+  const CHAR_DWELL_MS = 80;
+  const ORDER_GRACE_MS = 250;
+  const MAX_QUEUE = 5;
+
+  const records = new Map();
+  const displayQueue = [];
+  let currentId = null;
+  let currentMode = "idle";
+  let currentUntil = 0;
+  let lastDisplayedDoneId = -1;
+  let timer = null;
 
   // 把中文里的英文术语(连续 ASCII 词)高亮为金色,无需术语表(design §5.4 L1)
   function hl(text) {
-    const esc = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const esc = (text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     return esc.replace(/[A-Za-z][A-Za-z0-9.+#_-]*/g, (m) => `<span class="term">${m}</span>`);
+  }
+
+  function clamp(n, min, max) {
+    return Math.max(min, Math.min(max, n));
+  }
+
+  function dwellMs(text) {
+    let ms = clamp(1400 + Array.from(text || "").length * CHAR_DWELL_MS, MIN_DWELL_MS, MAX_DWELL_MS);
+    if (displayQueue.length >= 3) ms = Math.min(ms, 1600);
+    if (displayQueue.length >= MAX_QUEUE) ms = Math.min(ms, 1000);
+    return ms;
+  }
+
+  function renderRecord(record) {
+    const { id, original, translated, status } = record;
+    currentId = id;
+
+    const enPartial = status === "asr_partial";
+    enEl.className = enPartial ? "en partial" : "en";
+    enEl.innerHTML = hl(original) + (enPartial ? '<span class="caret"></span>' : "");
+
+    if (status === "done") {
+      currentMode = "done";
+      lastDisplayedDoneId = Math.max(lastDisplayedDoneId, id);
+      zhEl.innerHTML = hl(translated);
+      currentUntil = Date.now() + dwellMs(translated);
+      schedule(currentUntil - Date.now());
+    } else {
+      currentMode = "live";
+      currentUntil = 0;
+      if (status === "translating") {
+        zhEl.innerHTML = hl(translated) + '<span class="dots">▋</span>';
+      } else if (status === "asr_final") {
+        zhEl.innerHTML = '<span class="dots">翻译中…</span>';
+      } else {
+        zhEl.innerHTML = "";
+      }
+    }
+  }
+
+  function latestLiveRecord() {
+    let latest = null;
+    for (const record of records.values()) {
+      if (record.id <= lastDisplayedDoneId || record.status === "done") continue;
+      if (!latest || record.id > latest.id) latest = record;
+    }
+    return latest;
+  }
+
+  function enqueueDone(id) {
+    if (id <= lastDisplayedDoneId || displayQueue.includes(id)) return;
+    displayQueue.push(id);
+    displayQueue.sort((a, b) => a - b);
+    while (displayQueue.length > MAX_QUEUE) displayQueue.shift();
+  }
+
+  function schedule(delay) {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(playNext, Math.max(0, delay));
+  }
+
+  function playNext() {
+    timer = null;
+    if (currentMode === "done" && Date.now() < currentUntil) {
+      schedule(currentUntil - Date.now());
+      return;
+    }
+
+    while (displayQueue.length) {
+      const id = displayQueue.shift();
+      const record = records.get(id);
+      if (!record || record.status !== "done" || id <= lastDisplayedDoneId) continue;
+      renderRecord(record);
+      return;
+    }
+
+    const live = latestLiveRecord();
+    if (live) {
+      renderRecord(live);
+      return;
+    }
+
+    currentId = null;
+    currentMode = "idle";
   }
 
   function onSubtitle(p) {
@@ -72,19 +168,30 @@
       zhEl.innerHTML = `<span class="err">${original} ${translated}</span>`;
       return;
     }
-    curId = id;
-    // 英文行
-    const enPartial = status === "asr_partial";
-    enEl.className = enPartial ? "en partial" : "en";
-    enEl.innerHTML = hl(original) + (enPartial ? '<span class="caret"></span>' : "");
-    // 中文行
-    if (status === "translating" || status === "done") {
-      zhEl.innerHTML = hl(translated) + (status === "translating" ? '<span class="dots">▋</span>' : "");
-    } else if (status === "asr_final") {
-      zhEl.innerHTML = '<span class="dots">翻译中…</span>';
-    } else {
-      // 英文流式阶段:中文行留空,等整句定稿
-      zhEl.innerHTML = "";
+
+    const prev = records.get(id) || {};
+    if (prev.status === "done" && status !== "done") return;
+
+    const record = {
+      id,
+      original: original || prev.original || "",
+      translated: translated || prev.translated || "",
+      status,
+    };
+    records.set(id, record);
+
+    if (status === "done") {
+      enqueueDone(id);
+      schedule(currentMode === "done" ? currentUntil - Date.now() : ORDER_GRACE_MS);
+      return;
+    }
+
+    if (currentMode === "done" && Date.now() < currentUntil && currentId !== id) {
+      return;
+    }
+
+    if (currentId === id || currentMode !== "done") {
+      renderRecord(record);
     }
   }
 
