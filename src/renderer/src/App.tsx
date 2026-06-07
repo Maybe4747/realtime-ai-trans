@@ -56,6 +56,7 @@ function MainView({ session, setSession, subtitles }: MainViewProps): React.JSX.
   const [historyOpen, setHistoryOpen] = useState(true)
   const [overlayVisible, setOverlayVisible] = useState(false)
   const [localError, setLocalError] = useState('')
+  const [historyNow, setHistoryNow] = useState(0)
   const { isCapturing, startCapture, stopCapture } = useAudioCapture()
 
   const latestSubtitle = useMemo(() => subtitles.at(-1), [subtitles])
@@ -69,6 +70,13 @@ function MainView({ session, setSession, subtitles }: MainViewProps): React.JSX.
       void stopCapture()
     }
   }, [session.status, stopCapture])
+
+  useEffect(() => {
+    const updateHistoryClock = (): void => setHistoryNow(Date.now())
+    updateHistoryClock()
+    const interval = window.setInterval(updateHistoryClock, 30_000)
+    return () => window.clearInterval(interval)
+  }, [])
 
   const start = async (): Promise<void> => {
     setLocalError('')
@@ -203,7 +211,7 @@ function MainView({ session, setSession, subtitles }: MainViewProps): React.JSX.
             清空
           </button>
         </div>
-        {historyOpen && <HistoryList subtitles={subtitles} />}
+        {historyOpen && <HistoryList subtitles={subtitles} now={historyNow} />}
       </section>
     </main>
   )
@@ -232,14 +240,22 @@ function OverlayView({ session, subtitles }: OverlayViewProps): React.JSX.Elemen
   )
 }
 
-function HistoryList({ subtitles }: { subtitles: SubtitleItem[] }): React.JSX.Element {
-  if (subtitles.length === 0) {
-    return <p className="empty-history">暂无字幕记录</p>
+function HistoryList({
+  subtitles,
+  now
+}: {
+  subtitles: SubtitleItem[]
+  now: number
+}): React.JSX.Element {
+  const recentSubtitles = subtitles.filter((item) => now - item.updatedAt <= HISTORY_WINDOW_MS)
+
+  if (recentSubtitles.length === 0) {
+    return <p className="empty-history">最近 3 分钟暂无字幕记录</p>
   }
 
   return (
     <ol className="history-list">
-      {subtitles
+      {recentSubtitles
         .slice()
         .reverse()
         .map((item) => (
@@ -307,5 +323,7 @@ const subtitleStatusText = {
   stable: '已确认',
   revised: '已修正'
 }
+
+const HISTORY_WINDOW_MS = 3 * 60 * 1000
 
 export default App
