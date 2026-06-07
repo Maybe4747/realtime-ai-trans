@@ -108,19 +108,7 @@ select {
   height: 32px;
   flex: none;
   border-radius: 8px;
-  background: linear-gradient(180deg, #202124, #111113);
-  position: relative;
-}
-
-.brand-mark::after {
-  content: "";
-  position: absolute;
-  right: 7px;
-  bottom: 7px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--app-accent);
+  display: block;
 }
 
 .brand h1 {

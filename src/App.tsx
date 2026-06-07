@@ -301,7 +301,7 @@ function App() {
     <main className="console-shell">
       <aside className="console-sidebar">
         <div className="brand">
-          <span className="brand-mark" />
+          <img className="brand-mark" src="/logo.svg" alt="" aria-hidden="true" />
           <div>
             <h1>LUMEN</h1>
             <p>实时双语字幕</p>
