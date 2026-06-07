@@ -1,5 +1,34 @@
-# realtime-ai-trans
-本项目是一个桌面悬浮智能翻译助手
-如果让我给这个项目定一个产品方向，我会把它定义成：
+# demo
 
-TranslationOS：一个可插拔的桌面级 AI 字幕引擎。
+An Electron application with React and TypeScript
+
+## Recommended IDE Setup
+
+- [VSCode](https://code.visualstudio.com/) + [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) + [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
+
+## Project Setup
+
+### Install
+
+```bash
+$ npm install
+```
+
+### Development
+
+```bash
+$ npm run dev
+```
+
+### Build
+
+```bash
+# For windows
+$ npm run build:win
+
+# For macOS
+$ npm run build:mac
+
+# For Linux
+$ npm run build:linux
+```
