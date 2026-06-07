@@ -38,6 +38,7 @@
 3. **字幕不挡操作。** 悬浮窗鼠标穿透,不影响点视频/会议。
 4. **必须盖得住全屏视频。** 看视频几乎必然全屏,字幕浮不到全屏之上则产品价值减半(见 §8 风险)。
 5. **零配置起步。** 利用 ScreenCaptureKit 抓系统音频,只需一次录屏授权,不要求用户装虚拟声卡。
+6. **只把有内容的语音送上云端。** VAD 门控过滤静音/杂音/纯音乐 → 省延迟、省费用;ASR 只管转写,术语准确率交给翻译层。
 
 ---
 
@@ -50,7 +51,7 @@
 | 音频采集 | ScreenCaptureKit (macOS 13+)                | 零配置抓系统音频                      |
 | 断句     | 本地 VAD(Silero VAD via ONNX,或 webrtc-vad) | 按静音切句                            |
 | ASR      | **智谱 GLM-ASR-2512**                       | HTTP,单段 ≤30s,支持英文,`stream=true` |
-| 翻译     | **智谱 GLM-4.7-Flash(免费)**                | OpenAI 兼容,`stream=true`,200K 上下文 |
+| 翻译     | **智谱 GLM-4.7-Flash(免费)** · 默认         | OpenAI 兼容,`stream=true`,200K;走 `Translator` 抽象,可切通用翻译 API |
 | 密钥存储 | OS Keychain / Tauri store                   | 智谱 API key,仅存 Rust 侧             |
 
 ### 3.1 两个云端模型的关键事实(已核对官方文档)
@@ -62,7 +63,10 @@
 - `stream=true`: 单段识别结果流式返回(非无限音频流)
 - 语言: 中文(含方言)、**英文**(英美音)、法德日韩西阿等
 - 它是 **ASR(转写),不是翻译**,翻译需独立一步(GLM-4.7-Flash)
-- ⚠️ 采样率/编码细节、interim/final 字段、价格、延迟:概览页未给,**实现时需查 API reference 实测**
+- 流式格式(**已确认**):SSE,`type=transcript.text.delta`(增量,取 `delta`)/ `transcript.text.done`(完成),结尾 `data: [DONE]`
+- 响应**不含**置信度/分段/时间戳,只有 `text` → 过滤垃圾结果只能靠启发式(见 §5.3)
+- 支持 `hotwords`(≤100)与 `prompt`(上下文,<8000 字)参数,但 **MVP 不用**,保持 ASR 纯净(见 §5.4 末)
+- ⚠️ 采样率/编码/位深官方未写、价格未知:**实现时实测**
 
 **GLM-4.7-Flash**
 
@@ -70,6 +74,14 @@
 - `stream=true` 支持;上下文 200K,最大输出 128K
 - 免费档(具体 RPM/TPM 限流官方未明示,**需实测**)
 - 适合翻译;中英翻译质量需实测
+
+**通用翻译 API(`general_translation`,可选 · 后续)**
+
+- 接口: `POST https://open.bigmodel.cn/api/v1/agents`,`agent_id=general_translation`(**非** OpenAI 兼容,需单独适配)
+- `stream=true`(SSE);`source_lang=auto` 自动检测,`target_lang=zh-CN`
+- **术语表 glossary**(file_id):同一术语全程统一译法 —— 学习/技术内容的独有价值
+- `strategy`: `general`(单步,**实时只能用这个**)/ `reflection`/`cot`/`two_step`/`three_step`(多步=高延迟,实时用不了);`suggestion` 可指定口语化/字幕风格
+- 计费: **20 元/百万 token**(1h 视频约 1~2 元)
 
 ---
 
@@ -127,25 +139,46 @@ GLM-ASR 单段 ≤30s 的 HTTP 接口决定了无法喂无限音频流。因此:
 - Rust 绑定候选: `screencapturekit` crate / `cidre`,或编一个极薄的 Swift sidecar 桥接。**成熟度是 #1 风险(见 §8)。**
 - 备选(后续):macOS 14.2+ Core Audio Tap(`AudioHardwareCreateProcessTap`)可不依赖录屏权限,但 Rust 生态更不成熟。
 
-### 5.2 VAD 切句(Rust)
+### 5.2 VAD 切句与内容门控(Rust)
 
-- 候选: Silero VAD(ONNX,经 `ort` 或 `voice_activity_detector` crate)质量好;`webrtc-vad` 更轻;能量阈值最简(兜底)。
-- 逻辑: 30ms 帧检测 → 累积语音帧 → 静音持续 > 阈值(默认 ~600ms)即收一段;段长逼近 ~25s 强制切。
-- 每段前后各加少量 padding(~200ms),避免首尾词被削。
-- 参数(静音阈值、灵敏度)做成可调,影响"出字幕快慢 vs 句子完整度"。
+只把"有内容的语音"送上云端 → 省延迟、省费用(避开静音/杂音/纯音乐的无效请求)。三道闸:
+
+- **闸 1 · VAD(本地,送 ASR 前):** Silero VAD(ONNX,经 `ort` / `voice_activity_detector` crate)质量好;`webrtc-vad` 更轻;能量阈值兜底。逐帧检测,纯静音直接不产生段。
+- **闸 2 · 本地兜底(送 ASR 前):** 最短语音时长门限(如 <300ms 的爆音/点击噪声丢弃);Silero 对非语音噪声/音乐有一定鲁棒性,降低误触发。
+- **闸 3 · ASR 后(见 §5.3):** GLM-ASR 不返回置信度,故对返回文本做启发式过滤(空串、纯重复/幻觉模式)→ 丢弃则**连翻译调用一起省掉**。
+
+**切句(端点检测)逻辑:** 语音起始开段 → 静音持续 > 阈值(默认 ~600ms)收段;逼近 ~25s 强制切(兜底 30s 限制);每段前后加 ~200ms padding 防削词。参数可调。
+
+⚠️ **端点阈值直接影响翻译质量:** 切太碎 → 句子残缺、上下文丢失、译文差;切太长 → 延迟高。优先在自然句边界(较长停顿)断句。
 
 ### 5.3 ASR 调用(Rust)
 
-- 每段: multipart POST 到 GLM-ASR,字段 `model=glm-asr-2512` + WAV(16kHz mono)+ `stream=true`。
-- 解析流式响应(SSE/chunked,**具体格式实现时核对 API reference**)→ 累积文本 → 段结束即该句 final。
-- 该句获得稳定 id,interim 阶段不断更新 `original`,final 时锁定。
+**职责单一:音频 → 文字,不管术语对错(术语交给 §5.4 翻译层)。** 走 `Asr` trait,保持可替换。
 
-### 5.4 翻译调用(Rust)
+- 每段: multipart POST 到 GLM-ASR,`model=glm-asr-2512` + WAV(16kHz mono)+ `stream=true`。
+- 流式响应(已确认):SSE,`transcript.text.delta`(增量,取 `delta`)累积 → `transcript.text.done` 即该句 final,结尾 `data: [DONE]`。
+- 该句获得稳定 id,delta 阶段更新 `original`,done 时锁定。
+- **后置过滤(闸 3):** 无置信度可用,故按启发式丢弃空串 / 纯重复 / 已知幻觉短语(如静音上冒出的 "Thank you" 类),避免触发无谓翻译。
+- `hotwords`/`prompt` 参数存在但 **MVP 不用** —— 让 ASR 保持纯净、可替换;留作后续"听错专有名词"的可选逃生口(见 §5.4 末)。
 
-- 触发: 某句 ASR final。
-- 请求 GLM-4.7-Flash,`stream=true`,system prompt 约束"逐句口语化翻成简洁简体中文,只输出译文";user 内容含**最近 1~2 句原文做上下文**(术语/代词连贯)。
-- 维护一个滚动会话上下文(200K 窗口足够放整场)。
-- 流式收中文 token → 更新该句 `translated`。
+### 5.4 翻译调用与准确率(Rust)
+
+翻译抽象成 `Translator` trait(与 ASR 对称,可换后端)。MVP 默认 = GLM-4.7-Flash;通用翻译 API 作后续"高质量/术语表"可选档。**术语准确率全压在这一层**(ASR 只管转写)。
+
+- 触发: 某句 ASR final → `chat/completions`,`stream=true` → 流式收中文,更新该句 `translated`。
+
+**准确率三层(逐级加力):**
+
+1. **Prompt 规则(零配置,收益最大):** system prompt 硬性要求"保留专有名词 / 产品名 / 库名 / 技术术语 / 代码标识符为英文,不硬译"。多数 bun→包子 这类,在 techy 上下文里靠这条就解决。
+2. **滚动上下文(强化版):** 每次带最近 2~3 句 **(原文, 译文) 对**(而非只带译文)。作用:代词/主题连贯 + 隐式确定领域 + **术语自我强化**(某句把 Bun 保留后,后续自动跟着保留)。200K 上下文足够放整场。
+3. **术语表 / 热词(翻译层,兜底):** 用户可编辑的「术语→译法」表,注入翻译 prompt(或用通用翻译 API 原生 glossary),强制覆盖模型仍译错的顽固词。**注意:这是翻译层热词,不是 ASR 热词。**
+
+> **诚实的边界 ——「译错」vs「听错」:**
+> 上面三层修的是**译错**(ASR 听对了 bun,LLM 却译成包子)→ 归翻译层,没问题。
+> 但还有**听错**:ASR 把 "Bun" 直接听成 "born",此时文字里根本没有 bun,LLM 再聪明也救不回 → 只能靠 ASR `hotwords`。
+> MVP 按「ASR 纯净」主线**先不上 ASR 热词**;若实测发现专有名词频繁被听错,再把 GLM-ASR 的 `hotwords`(免费支持)接为可选逃生口,不动其余架构。
+
+- **可选后端(通用翻译 API):** `general` 单步策略(多步延迟太高,实时不可用)+ `suggestion` 控字幕风格 + 原生术语表;按量计费。
 
 ### 5.5 字幕悬浮窗(React)
 
@@ -225,15 +258,15 @@ Phase 3  产品化
   → 验收: 能日常拿来看油管学习
 
 Phase 4+ 后续
-  → 多语言、选单 app 音源、本地模型(隐私卖点)、会议模式、Windows
+  → 多语言、选单 app 音源、通用翻译 API(术语表/高质量档)、本地模型(隐私卖点)、会议模式、Windows
 ```
 
 ---
 
 ## 10. 待定 / 实现时确认
 
-- GLM-ASR 流式响应的确切 JSON/SSE 结构与字段名
-- GLM-ASR 对采样率/编码(16-bit PCM WAV?)的确切要求
+- GLM-ASR 对采样率/编码/位深(16-bit PCM WAV?)的确切要求(官方未写,需实测)
 - GLM-ASR / GLM-4.7-Flash 的限流与端到端延迟实测数据
 - VAD 选型最终定(Silero vs webrtc-vad)
 - 全屏悬浮窗在 Tauri 2 下的具体实现路径(插件 / 直接 objc)
+- 翻译后端 A/B 实测:GLM-4.7-Flash(默认)vs 通用翻译 API `general` —— 比质量 / 端到端延迟 / 限流
