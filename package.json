@@ -1,7 +1,7 @@
 {
-  "name": "demo",
+  "name": "echo-sub",
   "version": "1.0.0",
-  "description": "An Electron application with React and TypeScript",
+  "description": "听译窗是一款桌面端 AI 同声传译助手，能将用户正在观看或收听的外语音频实时翻译成中文字幕，并在上下文变清楚后自动修正前文字幕，帮助用户持续跟上外语内容节奏。",
   "main": "./out/main/index.js",
   "author": "example.com",
   "homepage": "https://electron-vite.org",
