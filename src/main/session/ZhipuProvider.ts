@@ -149,6 +149,7 @@ export class ZhipuProvider {
   private async transcribe(wav: Buffer, segmentId: string): Promise<string> {
     const form = new FormData()
     form.set('model', ASR_MODEL)
+    form.set('stream', 'false')
     form.set('file', new Blob([new Uint8Array(wav)], { type: 'audio/wav' }), `${segmentId}.wav`)
 
     const response = await fetch(ASR_ENDPOINT, {

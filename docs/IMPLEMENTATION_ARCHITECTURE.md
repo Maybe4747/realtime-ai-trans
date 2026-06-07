@@ -149,7 +149,7 @@ slider
 ```text
 1. Renderer 请求麦克风权限
 2. Renderer 创建 AudioContext
-3. AudioWorklet 或 ScriptProcessor 将音频转成 PCM16 分片
+3. AudioWorklet 将音频转成 PCM16 分片
 4. Renderer 通过 IPC 发送 audio:chunk
 5. Main 创建 AI 实时会话
 6. Main 转发音频分片到 AI Provider
