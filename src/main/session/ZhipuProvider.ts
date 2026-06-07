@@ -83,6 +83,11 @@ export class ZhipuProvider {
     await this.flushing
   }
 
+  cancel(): void {
+    this.active = false
+    this.buffers = []
+  }
+
   onEvent(callback: (event: ProviderEvent) => void): () => void {
     this.eventListeners.add(callback)
     return () => this.eventListeners.delete(callback)
@@ -217,6 +222,8 @@ export class ZhipuProvider {
   }
 
   private emitError(error: unknown): void {
+    this.cancel()
+
     for (const listener of this.errorListeners) {
       listener(error)
     }
