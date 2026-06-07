@@ -1,0 +1,860 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>听译窗 v0</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #edf0f3;
+        --window: rgba(248, 249, 250, 0.86);
+        --sidebar: rgba(235, 238, 242, 0.82);
+        --panel: rgba(255, 255, 255, 0.78);
+        --panel-solid: #ffffff;
+        --line: rgba(70, 82, 96, 0.16);
+        --text: #17202a;
+        --muted: #66717d;
+        --quiet: #8b96a3;
+        --blue: #0a84ff;
+        --blue-soft: #e8f2ff;
+        --green: #30a46c;
+        --green-soft: #e8f7ef;
+        --amber: #b7791f;
+        --amber-soft: #fff5d8;
+        --red: #c24141;
+        --shadow: 0 28px 72px rgba(31, 42, 55, 0.2);
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        color: var(--text);
+        background:
+          linear-gradient(145deg, rgba(214, 221, 230, 0.74), rgba(247, 248, 250, 0.92)), var(--bg);
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      .window {
+        width: min(1060px, calc(100vw - 40px));
+        height: min(700px, calc(100vh - 40px));
+        min-height: 640px;
+        display: grid;
+        grid-template-columns: 238px minmax(0, 1fr);
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.74);
+        border-radius: 18px;
+        background: var(--window);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(24px) saturate(1.18);
+      }
+
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        border-right: 1px solid var(--line);
+        background: var(--sidebar);
+      }
+
+      .chrome {
+        height: 54px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 18px;
+      }
+
+      .traffic {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+      }
+
+      .traffic.red {
+        background: #ff5f57;
+      }
+
+      .traffic.yellow {
+        background: #ffbd2e;
+      }
+
+      .traffic.green {
+        background: #28c840;
+      }
+
+      .product {
+        padding: 10px 18px 16px;
+      }
+
+      .product h1 {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 720;
+        line-height: 1.1;
+      }
+
+      .product p {
+        margin: 7px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .nav {
+        display: grid;
+        gap: 4px;
+        padding: 0 10px;
+      }
+
+      .nav button {
+        height: 38px;
+        display: grid;
+        grid-template-columns: 26px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 9px;
+        padding: 0 10px;
+        border: 0;
+        border-radius: 8px;
+        color: #334155;
+        background: transparent;
+        text-align: left;
+      }
+
+      .nav button.active {
+        color: #111827;
+        background: rgba(255, 255, 255, 0.76);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.62);
+      }
+
+      .nav-icon {
+        width: 24px;
+        height: 24px;
+        display: grid;
+        place-items: center;
+        border-radius: 7px;
+        color: #ffffff;
+        background: #5e6b7d;
+        font-size: 12px;
+        font-weight: 760;
+      }
+
+      .nav button[data-view='home'] .nav-icon {
+        background: var(--blue);
+      }
+
+      .nav button[data-view='settings'] .nav-icon {
+        background: #697386;
+      }
+
+      .nav-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+        font-weight: 650;
+      }
+
+      .nav-count {
+        min-width: 22px;
+        height: 20px;
+        display: grid;
+        place-items: center;
+        border-radius: 999px;
+        color: var(--quiet);
+        background: rgba(255, 255, 255, 0.52);
+        font-size: 11px;
+        font-weight: 680;
+      }
+
+      .sidebar-footer {
+        margin-top: auto;
+        padding: 14px 18px 18px;
+      }
+
+      .mini-status {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 9px;
+        align-items: center;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.56);
+      }
+
+      .status-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--green);
+        box-shadow: 0 0 0 4px rgba(48, 164, 108, 0.12);
+      }
+
+      .mini-status strong {
+        display: block;
+        font-size: 12px;
+        font-weight: 720;
+      }
+
+      .mini-status span {
+        display: block;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .content {
+        min-width: 0;
+        overflow: auto;
+        padding: 32px 34px;
+      }
+
+      .view {
+        display: none;
+      }
+
+      .view.active {
+        display: block;
+      }
+
+      .content-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 20px;
+        margin-bottom: 22px;
+      }
+
+      .content-header h2 {
+        margin: 0;
+        font-size: 30px;
+        font-weight: 760;
+        line-height: 1.08;
+      }
+
+      .content-header p {
+        max-width: 520px;
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .primary-action {
+        height: 36px;
+        padding: 0 14px;
+        border: 0;
+        border-radius: 8px;
+        color: #ffffff;
+        background: var(--blue);
+        font-size: 13px;
+        font-weight: 720;
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+
+      .metric,
+      .panel,
+      .settings-group {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        backdrop-filter: blur(16px);
+      }
+
+      .metric {
+        min-height: 108px;
+        padding: 14px;
+      }
+
+      .metric span {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 680;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 14px;
+        font-size: 28px;
+        font-weight: 760;
+        line-height: 1;
+      }
+
+      .metric em {
+        display: block;
+        margin-top: 8px;
+        color: var(--quiet);
+        font-size: 12px;
+        font-style: normal;
+      }
+
+      .main-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.08fr) minmax(280px, 0.72fr);
+        gap: 14px;
+      }
+
+      .panel {
+        overflow: hidden;
+      }
+
+      .panel-head {
+        height: 52px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .panel-head h3 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 740;
+      }
+
+      .panel-head span {
+        color: var(--quiet);
+        font-size: 12px;
+      }
+
+      .history-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .history-item {
+        display: grid;
+        grid-template-columns: 72px minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: center;
+        min-height: 72px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .history-item:last-child {
+        border-bottom: 0;
+      }
+
+      .time {
+        color: var(--quiet);
+        font-size: 12px;
+        font-weight: 680;
+      }
+
+      .transcript strong {
+        display: block;
+        overflow: hidden;
+        color: var(--text);
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1.35;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .transcript span {
+        display: block;
+        margin-top: 3px;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tag {
+        min-width: 52px;
+        height: 24px;
+        display: grid;
+        place-items: center;
+        border-radius: 999px;
+        color: var(--green);
+        background: var(--green-soft);
+        font-size: 11px;
+        font-weight: 760;
+      }
+
+      .tag.revised {
+        color: var(--amber);
+        background: var(--amber-soft);
+      }
+
+      .insight-list {
+        display: grid;
+        gap: 10px;
+        padding: 14px;
+      }
+
+      .insight {
+        padding: 12px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.62);
+      }
+
+      .insight strong {
+        display: block;
+        font-size: 13px;
+        font-weight: 740;
+      }
+
+      .insight span {
+        display: block;
+        margin-top: 5px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .settings-stack {
+        display: grid;
+        gap: 14px;
+        max-width: 720px;
+      }
+
+      .settings-group {
+        overflow: hidden;
+      }
+
+      .group-title {
+        padding: 13px 16px 9px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 760;
+      }
+
+      .row {
+        min-height: 54px;
+        display: grid;
+        grid-template-columns: 190px minmax(0, 1fr);
+        align-items: center;
+        gap: 18px;
+        padding: 10px 16px;
+        border-top: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.42);
+      }
+
+      .row:first-of-type {
+        border-top: 0;
+      }
+
+      .row label,
+      .row .label {
+        font-size: 13px;
+        font-weight: 680;
+      }
+
+      .control {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .field,
+      .select {
+        width: 100%;
+        height: 34px;
+        min-width: 0;
+        border: 1px solid rgba(70, 82, 96, 0.2);
+        border-radius: 8px;
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.84);
+        outline: none;
+      }
+
+      .field {
+        padding: 0 11px;
+      }
+
+      .select {
+        padding: 0 8px;
+      }
+
+      .hint {
+        color: var(--quiet);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .toggle {
+        width: 42px;
+        height: 24px;
+        position: relative;
+        flex: 0 0 auto;
+        border: 0;
+        border-radius: 999px;
+        background: var(--blue);
+      }
+
+      .toggle::after {
+        content: '';
+        width: 20px;
+        height: 20px;
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        border-radius: 50%;
+        background: #ffffff;
+        box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+      }
+
+      .slider {
+        width: 100%;
+        accent-color: var(--blue);
+      }
+
+      .segmented {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        width: 100%;
+        padding: 3px;
+        border-radius: 8px;
+        background: rgba(114, 126, 140, 0.14);
+      }
+
+      .segmented button {
+        height: 28px;
+        border: 0;
+        border-radius: 6px;
+        color: var(--muted);
+        background: transparent;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .segmented button.active {
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+      }
+
+      .preview {
+        display: grid;
+        place-items: end center;
+        min-height: 160px;
+        padding: 20px;
+        background:
+          linear-gradient(rgba(20, 26, 33, 0.25), rgba(20, 26, 33, 0.25)),
+          linear-gradient(135deg, #cbd5e1, #eef2f7);
+      }
+
+      .subtitle-preview {
+        width: min(520px, 100%);
+        padding: 12px 16px;
+        border-radius: 8px;
+        color: #ffffff;
+        background: rgba(11, 15, 19, 0.78);
+        box-shadow: 0 14px 30px rgba(15, 23, 42, 0.22);
+      }
+
+      .subtitle-preview strong {
+        display: block;
+        overflow: hidden;
+        font-size: 20px;
+        font-weight: 760;
+        line-height: 1.25;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .subtitle-preview span {
+        display: block;
+        margin-top: 5px;
+        color: rgba(255, 255, 255, 0.62);
+        font-size: 12px;
+      }
+
+      @media (max-width: 900px) {
+        .window {
+          grid-template-columns: 72px minmax(0, 1fr);
+        }
+
+        .product,
+        .nav-label,
+        .nav-count,
+        .sidebar-footer {
+          display: none;
+        }
+
+        .nav {
+          padding: 8px;
+        }
+
+        .nav button {
+          grid-template-columns: 1fr;
+          justify-items: center;
+          padding: 0;
+        }
+
+        .summary-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .main-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="window">
+      <aside class="sidebar">
+        <div class="chrome">
+          <span class="traffic red"></span>
+          <span class="traffic yellow"></span>
+          <span class="traffic green"></span>
+        </div>
+
+        <div class="product">
+          <h1>听译窗</h1>
+          <p>实时字幕助手</p>
+        </div>
+
+        <nav class="nav" aria-label="主导航">
+          <button class="active" data-view="home">
+            <span class="nav-icon">H</span>
+            <span class="nav-label">主页</span>
+            <span class="nav-count">12</span>
+          </button>
+          <button data-view="settings">
+            <span class="nav-icon">S</span>
+            <span class="nav-label">设置</span>
+            <span class="nav-count">3</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="mini-status">
+            <span class="status-dot"></span>
+            <div>
+              <strong>智谱已连接</strong>
+              <span>glm-asr-2512 / glm-4.7-flash</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <main class="content">
+        <section id="home" class="view active">
+          <header class="content-header">
+            <div>
+              <h2>主页</h2>
+              <p>最近听译记录、字幕修正情况和今日使用概览。</p>
+            </div>
+            <button class="primary-action">开始听译</button>
+          </header>
+
+          <div class="summary-grid">
+            <article class="metric">
+              <span>今日时长</span>
+              <strong>42m</strong>
+              <em>比昨日 +18m</em>
+            </article>
+            <article class="metric">
+              <span>字幕句数</span>
+              <strong>186</strong>
+              <em>最近 3 次会话</em>
+            </article>
+            <article class="metric">
+              <span>修正次数</span>
+              <strong>14</strong>
+              <em>自动替换前文</em>
+            </article>
+            <article class="metric">
+              <span>平均延迟</span>
+              <strong>3.2s</strong>
+              <em>麦克风输入</em>
+            </article>
+          </div>
+
+          <div class="main-grid">
+            <section class="panel">
+              <div class="panel-head">
+                <h3>最近历史</h3>
+                <span>最近 3 分钟</span>
+              </div>
+              <ol class="history-list">
+                <li class="history-item">
+                  <span class="time">13:42</span>
+                  <div class="transcript">
+                    <strong>我们会把模型部署在边缘设备上，以降低实时推理延迟。</strong>
+                    <span>We deploy the model on edge devices to reduce latency.</span>
+                  </div>
+                  <span class="tag revised">已修正</span>
+                </li>
+                <li class="history-item">
+                  <span class="time">13:41</span>
+                  <div class="transcript">
+                    <strong>下一步是把字幕流拆成稳定句子和临时片段。</strong>
+                    <span>The next step is splitting subtitles into stable sentences.</span>
+                  </div>
+                  <span class="tag">已确认</span>
+                </li>
+                <li class="history-item">
+                  <span class="time">13:40</span>
+                  <div class="transcript">
+                    <strong>今天我们先看实时语音识别和翻译之间的链路。</strong>
+                    <span>Today we first look at the ASR to translation pipeline.</span>
+                  </div>
+                  <span class="tag">已确认</span>
+                </li>
+              </ol>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h3>概览</h3>
+                <span>本机</span>
+              </div>
+              <div class="insight-list">
+                <div class="insight">
+                  <strong>活跃会话</strong>
+                  <span>当前没有正在进行的听译，会话历史保留在本地。</span>
+                </div>
+                <div class="insight">
+                  <strong>字幕质量</strong>
+                  <span>最近 10 条字幕中有 2 条被上下文修正。</span>
+                </div>
+                <div class="insight">
+                  <strong>悬浮窗</strong>
+                  <span>默认位于屏幕底部居中，已启用真实置顶。</span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section id="settings" class="view">
+          <header class="content-header">
+            <div>
+              <h2>设置</h2>
+              <p>API Key、语言、字幕窗口和显示细节。</p>
+            </div>
+            <button class="primary-action">保存</button>
+          </header>
+
+          <div class="settings-stack">
+            <section class="settings-group">
+              <div class="group-title">智谱</div>
+              <div class="row">
+                <label for="api-key">API Key</label>
+                <div class="control">
+                  <input id="api-key" class="field" type="password" value="••••••••••••••••" />
+                  <span class="hint">环境变量优先</span>
+                </div>
+              </div>
+              <div class="row">
+                <span class="label">ASR 模型</span>
+                <div class="control">
+                  <input class="field" value="glm-asr-2512" readonly />
+                </div>
+              </div>
+              <div class="row">
+                <span class="label">翻译模型</span>
+                <div class="control">
+                  <input class="field" value="glm-4.7-flash" readonly />
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-group">
+              <div class="group-title">字幕</div>
+              <div class="row">
+                <label for="target-language">目标语言</label>
+                <div class="control">
+                  <select id="target-language" class="select">
+                    <option>简体中文</option>
+                    <option>英语</option>
+                    <option>日语</option>
+                    <option>韩语</option>
+                  </select>
+                </div>
+              </div>
+              <div class="row">
+                <span class="label">字号</span>
+                <div class="control">
+                  <input class="slider" type="range" min="18" max="34" value="26" />
+                  <span class="hint">26</span>
+                </div>
+              </div>
+              <div class="row">
+                <span class="label">透明度</span>
+                <div class="control">
+                  <input class="slider" type="range" min="40" max="95" value="78" />
+                  <span class="hint">78%</span>
+                </div>
+              </div>
+              <div class="row">
+                <span class="label">位置</span>
+                <div class="control">
+                  <div class="segmented" role="group" aria-label="字幕位置">
+                    <button>顶部</button>
+                    <button class="active">底部</button>
+                    <button>自定义</button>
+                  </div>
+                </div>
+              </div>
+              <div class="row">
+                <span class="label">自动修正高亮</span>
+                <div class="control">
+                  <button class="toggle" aria-label="自动修正高亮已开启"></button>
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-group">
+              <div class="group-title">预览</div>
+              <div class="preview">
+                <div class="subtitle-preview">
+                  <strong>我们会把模型部署在边缘设备上。</strong>
+                  <span>已修正 · 智谱实时字幕</span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const buttons = document.querySelectorAll('.nav button')
+      const views = document.querySelectorAll('.view')
+
+      buttons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const target = button.dataset.view
+
+          buttons.forEach((item) => item.classList.toggle('active', item === button))
+          views.forEach((view) => view.classList.toggle('active', view.id === target))
+        })
+      })
+    </script>
+  </body>
+</html>
