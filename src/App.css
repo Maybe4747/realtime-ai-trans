@@ -313,6 +313,12 @@ select {
   font-size: 0.78rem;
 }
 
+.field small {
+  color: var(--app-muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
 .field input,
 .field select {
   height: 34px;

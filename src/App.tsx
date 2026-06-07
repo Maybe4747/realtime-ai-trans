@@ -331,37 +331,39 @@ function SettingsView({
       <Card>
         <CardHeader>
           <CardTitle>服务连接</CardTitle>
-          <CardDescription>填写用于语音识别和翻译的访问密钥。</CardDescription>
+          <CardDescription>需要填写两个密钥：一个把声音转成文字，一个把文字翻译成中文。</CardDescription>
         </CardHeader>
         <CardContent className="form-grid">
           <label className="field">
             <span>语音识别服务</span>
             <select value={config.asrProvider} onChange={(e) => onChange("asrProvider", e.target.value)}>
-              <option value="zhipu_glm_asr">默认语音识别</option>
+              <option value="zhipu_glm_asr">智谱 GLM-ASR</option>
             </select>
+            <small>用于识别系统声音里的英文内容。</small>
           </label>
           <label className="field">
-            <span>语音识别访问密钥</span>
+            <span>智谱 API Key</span>
             <Input
               type="password"
               value={config.asrApiKey}
               onChange={(e) => onChange("asrApiKey", e.target.value)}
-              placeholder="用于语音识别"
+              placeholder="填入智谱开放平台的 API Key"
             />
           </label>
           <label className="field">
             <span>翻译服务</span>
             <select value={config.llmProvider} onChange={(e) => onChange("llmProvider", e.target.value)}>
-              <option value="deepseek_v4_flash">默认翻译服务</option>
+              <option value="deepseek_v4_flash">DeepSeek</option>
             </select>
+            <small>用于把识别出的英文翻译成中文。</small>
           </label>
           <label className="field">
-            <span>翻译访问密钥</span>
+            <span>DeepSeek API Key</span>
             <Input
               type="password"
               value={config.llmApiKey}
               onChange={(e) => onChange("llmApiKey", e.target.value)}
-              placeholder="用于翻译"
+              placeholder="填入 DeepSeek 平台的 API Key"
             />
           </label>
         </CardContent>
