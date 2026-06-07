@@ -59,7 +59,8 @@ function MainView({ session, setSession, subtitles }: MainViewProps): React.JSX.
   const { isCapturing, startCapture, stopCapture } = useAudioCapture()
 
   const latestSubtitle = useMemo(() => subtitles.at(-1), [subtitles])
-  const canStart = session.status === 'idle' || session.status === 'paused' || session.status === 'error'
+  const canStart =
+    session.status === 'idle' || session.status === 'paused' || session.status === 'error'
   const isBusy = session.status === 'connecting'
   const isListening = session.status === 'listening'
 

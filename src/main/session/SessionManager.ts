@@ -1,4 +1,9 @@
-import type { AudioChunk, SessionEvent, SessionState, StartSessionOptions } from '../../shared/types'
+import type {
+  AudioChunk,
+  SessionEvent,
+  SessionState,
+  StartSessionOptions
+} from '../../shared/types'
 import { SubtitleStore } from '../subtitles/SubtitleStore'
 import { ZhipuProvider } from './ZhipuProvider'
 

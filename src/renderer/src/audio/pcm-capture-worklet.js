@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
+
 const TARGET_SAMPLE_RATE = 16000
 const FRAME_SIZE = 1600
 
