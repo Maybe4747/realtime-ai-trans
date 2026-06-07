@@ -2,21 +2,25 @@ import { app, shell, BrowserWindow, ipcMain, screen } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import type { AudioChunk, OverlayBounds, StartSessionOptions } from '../shared/types'
+import type {
+  AppSettings,
+  AudioChunk,
+  OverlayBounds,
+  StartSessionOptions,
+  SubtitlePosition
+} from '../shared/types'
 import { SessionManager } from './session/SessionManager'
+import { AppDatabase } from './storage/AppDatabase'
 import { SubtitleStore } from './subtitles/SubtitleStore'
 
 let overlayWindow: BrowserWindow | undefined
 
-const subtitleStore = new SubtitleStore()
-const sessionManager = new SessionManager(subtitleStore)
-
 function createWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
-    width: 420,
-    height: 560,
-    minWidth: 360,
-    minHeight: 480,
+    width: 960,
+    height: 680,
+    minWidth: 820,
+    minHeight: 620,
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
@@ -49,14 +53,12 @@ function createWindow(): BrowserWindow {
 }
 
 function createOverlayWindow(): BrowserWindow {
-  const { workArea } = screen.getPrimaryDisplay()
-  const width = 860
-  const height = 160
+  const { x, y, width, height } = getOverlayBounds('bottom')
   const overlayWindow = new BrowserWindow({
     width,
     height,
-    x: Math.round(workArea.x + (workArea.width - width) / 2),
-    y: Math.round(workArea.y + workArea.height - height - 56),
+    x,
+    y,
     frame: false,
     transparent: true,
     resizable: false,
@@ -84,6 +86,19 @@ function createOverlayWindow(): BrowserWindow {
   return overlayWindow
 }
 
+function getOverlayBounds(position: SubtitlePosition): Required<OverlayBounds> {
+  const { workArea } = screen.getPrimaryDisplay()
+  const width = Math.min(860, Math.round(workArea.width * 0.72))
+  const height = 160
+  const x = Math.round(workArea.x + (workArea.width - width) / 2)
+  const y =
+    position === 'top'
+      ? Math.round(workArea.y + 56)
+      : Math.round(workArea.y + workArea.height - height - 56)
+
+  return { x, y, width, height }
+}
+
 function broadcast(channel: string, payload: unknown): void {
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) {
@@ -92,11 +107,23 @@ function broadcast(channel: string, payload: unknown): void {
   }
 }
 
-function registerIpcHandlers(): void {
-  ipcMain.handle('app:get-snapshot', () => ({
+function registerIpcHandlers(
+  database: AppDatabase,
+  subtitleStore: SubtitleStore,
+  sessionManager: SessionManager
+): void {
+  ipcMain.handle('app:get-snapshot', async () => ({
     session: sessionManager.getState(),
-    subtitles: subtitleStore.getSnapshot()
+    subtitles: subtitleStore.getSnapshot(),
+    settings: await database.getSettings()
   }))
+
+  ipcMain.handle('settings:get', () => database.getSettings())
+  ipcMain.handle('settings:save', async (_event, input) => {
+    const settings = await database.saveSettings(input)
+    broadcast('settings:event', { type: 'settings:changed', settings })
+    return settings
+  })
 
   ipcMain.handle('session:start', (_event, options: StartSessionOptions) =>
     sessionManager.start(options)
@@ -105,7 +132,9 @@ function registerIpcHandlers(): void {
   ipcMain.handle('session:stop', () => sessionManager.stop())
   ipcMain.on('audio:chunk', (_event, chunk: AudioChunk) => sessionManager.sendAudioChunk(chunk))
 
-  ipcMain.handle('overlay:show', () => {
+  ipcMain.handle('overlay:show', async () => {
+    const settings: AppSettings = await database.getSettings()
+    overlayWindow?.setBounds(getOverlayBounds(settings.subtitles.position))
     overlayWindow?.showInactive()
   })
   ipcMain.handle('overlay:hide', () => {
@@ -136,7 +165,15 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  registerIpcHandlers()
+  void initializeApp()
+})
+
+async function initializeApp(): Promise<void> {
+  const database = await AppDatabase.open(join(app.getPath('userData'), 'echo-sub.sqlite3'))
+  const subtitleStore = new SubtitleStore(database, await database.loadSubtitles())
+  const sessionManager = new SessionManager(subtitleStore, () => database.getZhipuApiKey())
+
+  registerIpcHandlers(database, subtitleStore, sessionManager)
 
   createWindow()
   overlayWindow = createOverlayWindow()
@@ -149,7 +186,7 @@ app.whenReady().then(() => {
       overlayWindow = createOverlayWindow()
     }
   })
-})
+}
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits

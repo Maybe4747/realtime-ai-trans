@@ -4,26 +4,22 @@ import type {
   SessionState,
   StartSessionOptions
 } from '../../shared/types'
+import { DEFAULT_TRANSLATION_CONFIG } from '../../shared/types'
 import { SubtitleStore } from '../subtitles/SubtitleStore'
 import { ZhipuProvider } from './ZhipuProvider'
 
-const defaultConfig = {
-  sourceLanguage: 'auto',
-  targetLanguage: 'zh-CN'
-} as const
-
 export class SessionManager {
-  private readonly subtitleStore: SubtitleStore
   private readonly listeners = new Set<(event: SessionEvent) => void>()
   private provider?: ZhipuProvider
   private state: SessionState = {
     status: 'idle',
-    config: defaultConfig
+    config: DEFAULT_TRANSLATION_CONFIG
   }
 
-  constructor(subtitleStore: SubtitleStore) {
-    this.subtitleStore = subtitleStore
-  }
+  constructor(
+    private readonly subtitleStore: SubtitleStore,
+    private readonly getApiKey: () => Promise<string | undefined>
+  ) {}
 
   getState(): SessionState {
     return { ...this.state }
@@ -35,9 +31,9 @@ export class SessionManager {
   }
 
   async start(options: StartSessionOptions): Promise<SessionState> {
-    const apiKey = process.env.ZHIPU_API_KEY
+    const apiKey = await this.getApiKey()
     if (!apiKey) {
-      return this.fail('请先设置 ZHIPU_API_KEY 环境变量')
+      return this.fail('请先在设置中填写智谱 API Key，或设置 ZHIPU_API_KEY 环境变量')
     }
 
     await this.provider?.stop()
@@ -46,10 +42,6 @@ export class SessionManager {
       this.state.status === 'paused' && this.state.sessionId
         ? this.state.sessionId
         : `session-${Date.now()}`
-
-    if (this.state.status !== 'paused') {
-      this.subtitleStore.clear()
-    }
 
     this.setState({
       sessionId,
@@ -65,7 +57,7 @@ export class SessionManager {
       apiKey,
       sessionId,
       config: options,
-      getRecentSubtitles: () => this.subtitleStore.getRecentStable()
+      getRecentSubtitles: () => this.subtitleStore.getRecentStable(undefined, sessionId)
     })
 
     provider.onEvent((event) => {
