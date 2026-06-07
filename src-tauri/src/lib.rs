@@ -43,6 +43,7 @@ pub fn run() {
             audio::start_capture,
             audio::stop_capture,
             db::get_app_config,
+            db::get_app_stats,
             db::get_translation_history,
             db::save_app_config,
             overlay::set_subtitle_click_through,

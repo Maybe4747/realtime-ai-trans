@@ -39,6 +39,15 @@ pub struct TranslationHistoryItem {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AppStats {
+    pub usage_seconds: i64,
+    pub translated_chars: i64,
+    pub subtitle_count: i64,
+    pub original_chars: i64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct SubtitleConfig {
     subtitle_mode: String,
     min_dwell_ms: i64,
@@ -241,6 +250,51 @@ pub fn get_translation_history(
     Ok(items)
 }
 
+#[tauri::command]
+pub fn get_app_stats(app: AppHandle) -> Result<AppStats, String> {
+    let conn = connect(&app)?;
+    migrate(&conn)?;
+    let (subtitle_count, translated_chars, original_chars) = conn
+        .query_row(
+            "SELECT
+                COUNT(*),
+                COALESCE(SUM(LENGTH(translated)), 0),
+                COALESCE(SUM(LENGTH(original)), 0)
+            FROM translation_history",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .map_err(|e| format!("读取统计数据失败: {e}"))?;
+    let usage_seconds = conn
+        .query_row(
+            "SELECT COALESCE(SUM(duration_seconds), 0) FROM usage_sessions",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|e| format!("读取使用时长失败: {e}"))?;
+
+    Ok(AppStats {
+        usage_seconds,
+        translated_chars,
+        subtitle_count,
+        original_chars,
+    })
+}
+
+pub fn save_usage_session(app: &AppHandle, duration_seconds: i64) -> Result<(), String> {
+    if duration_seconds <= 0 {
+        return Ok(());
+    }
+    let conn = connect(app)?;
+    migrate(&conn)?;
+    conn.execute(
+        "INSERT INTO usage_sessions (duration_seconds, created_at) VALUES (?1, CURRENT_TIMESTAMP)",
+        params![duration_seconds],
+    )
+    .map_err(|e| format!("保存使用时长失败: {e}"))?;
+    Ok(())
+}
+
 pub fn save_translation_history(
     app: &AppHandle,
     original: &str,
@@ -318,6 +372,12 @@ fn migrate(conn: &Connection) -> Result<(), String> {
             translated TEXT NOT NULL,
             source_language TEXT NOT NULL DEFAULT 'en',
             target_language TEXT NOT NULL DEFAULT 'zh-CN',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS usage_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            duration_seconds INTEGER NOT NULL,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 

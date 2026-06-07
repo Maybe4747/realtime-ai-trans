@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
@@ -104,6 +105,7 @@ pub struct CaptureStateEvent {
 }
 
 struct CaptureSession {
+    started_at: Instant,
     #[cfg(target_os = "macos")]
     stream: screencapturekit::prelude::SCStream,
     #[cfg(target_os = "windows")]
@@ -147,7 +149,8 @@ pub fn start_capture(app: AppHandle) -> Result<(), String> {
         tx,
     }));
 
-    let session = platform::start(vad, &app)?;
+    let mut session = platform::start(vad, &app)?;
+    session.started_at = Instant::now();
     *guard = Some(session);
     drop(guard);
     emit_capture_state(&app, platform::RUNNING_MESSAGE);
@@ -160,7 +163,11 @@ pub fn stop_capture(app: AppHandle) -> Result<(), String> {
         let mut guard = SESSION.lock().unwrap();
         guard.take().ok_or("当前未在运行")?
     };
+    let duration_seconds = session.started_at.elapsed().as_secs() as i64;
     platform::stop(session)?;
+    if let Err(e) = db::save_usage_session(&app, duration_seconds) {
+        eprintln!("[stats] 保存使用时长失败: {e}");
+    }
     emit_capture_state(&app, "已停止");
     Ok(())
 }
@@ -314,7 +321,10 @@ mod platform {
             .start_capture()
             .map_err(|e| format!("启动采集失败(检查屏幕录制权限): {e:?}"))?;
 
-        Ok(CaptureSession { stream })
+        Ok(CaptureSession {
+            started_at: Instant::now(),
+            stream,
+        })
     }
 
     pub fn stop(session: CaptureSession) -> Result<(), String> {
@@ -438,7 +448,10 @@ mod platform {
             }
         });
 
-        Ok(CaptureSession { stop })
+        Ok(CaptureSession {
+            started_at: Instant::now(),
+            stop,
+        })
     }
 
     pub fn stop(session: CaptureSession) -> Result<(), String> {

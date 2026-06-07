@@ -76,6 +76,20 @@ type TranslationHistoryItem = {
   createdAt: string;
 };
 
+type AppStats = {
+  usageSeconds: number;
+  translatedChars: number;
+  subtitleCount: number;
+  originalChars: number;
+};
+
+const defaultStats: AppStats = {
+  usageSeconds: 0,
+  translatedChars: 0,
+  subtitleCount: 0,
+  originalChars: 0,
+};
+
 const defaultConfig: AppConfig = {
   asrProvider: "zhipu_glm_asr",
   asrApiKey: "",
@@ -122,6 +136,19 @@ function languageLabel(value: string) {
   return languageOptions.find((item) => item.value === value)?.label || value;
 }
 
+function formatUsage(seconds: number) {
+  const totalMinutes = Math.floor(seconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+}
+
+function formatCoveredAudio(subtitleCount: number) {
+  const estimatedSeconds = subtitleCount * 4;
+  if (estimatedSeconds < 60) return `${estimatedSeconds}s`;
+  return `${Math.round(estimatedSeconds / 60)}m`;
+}
+
 function App() {
   const [view, setView] = useState<View>("home");
   const [status, setStatus] = useState<Status>("idle");
@@ -135,6 +162,7 @@ function App() {
   const [toolsOpen, setToolsOpen] = useState(true);
   const [history, setHistory] = useState<TranslationHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [stats, setStats] = useState<AppStats>(defaultStats);
 
   const configured = Boolean(config.asrApiKey.trim() && config.llmApiKey.trim());
   const inTools = view === "toolsText" || view === "toolsAudio";
@@ -150,6 +178,7 @@ function App() {
       .then((saved) => setConfig(saved))
       .catch((e) => setMsg(`配置读取失败: ${e}`));
     loadHistory();
+    loadStats();
   }, []);
 
   useEffect(() => {
@@ -173,6 +202,7 @@ function App() {
           },
           ...items,
         ].slice(0, 50));
+        loadStats();
       }
     });
     return () => {
@@ -202,6 +232,7 @@ function App() {
         await invoke("stop_capture");
         setStatus("idle");
         setMsg("已停止");
+        loadStats();
       }
     } catch (e) {
       setStatus("idle");
@@ -254,6 +285,15 @@ function App() {
       setMsg(`历史读取失败: ${e}`);
     } finally {
       setHistoryLoading(false);
+    }
+  }
+
+  async function loadStats() {
+    try {
+      const nextStats = await invoke<AppStats>("get_app_stats");
+      setStats(nextStats);
+    } catch (e) {
+      console.warn("统计数据读取失败", e);
     }
   }
 
@@ -363,6 +403,7 @@ function App() {
               clickThrough={clickThrough}
               sourceLanguage={config.sourceLanguage}
               targetLanguage={config.targetLanguage}
+              stats={stats}
               saving={saving}
               onToggleClickThrough={toggleClickThrough}
               onLanguageChange={saveLanguage}
@@ -395,6 +436,7 @@ function HomeView({
   clickThrough,
   sourceLanguage,
   targetLanguage,
+  stats,
   saving,
   onToggleClickThrough,
   onLanguageChange,
@@ -406,15 +448,16 @@ function HomeView({
   clickThrough: boolean;
   sourceLanguage: string;
   targetLanguage: string;
+  stats: AppStats;
   saving: boolean;
   onToggleClickThrough: () => void;
   onLanguageChange: (sourceLanguage: string, targetLanguage: string) => void;
 }) {
-  const stats = [
-    { label: "累计使用时长", value: "0h 00m", hint: "从保存的使用记录统计" },
-    { label: "翻译字数", value: "0", hint: "已处理的译文字数" },
-    { label: "字幕句数", value: "0", hint: "已生成的字幕数量" },
-    { label: "覆盖内容", value: "0m", hint: "已识别的音频时长" },
+  const statItems = [
+    { label: "累计使用时长", value: formatUsage(stats.usageSeconds), hint: "从开始/停止同传记录统计" },
+    { label: "翻译字数", value: stats.translatedChars.toLocaleString(), hint: "已保存历史的译文字数" },
+    { label: "字幕句数", value: stats.subtitleCount.toLocaleString(), hint: "已保存的字幕数量" },
+    { label: "覆盖内容", value: formatCoveredAudio(stats.subtitleCount), hint: "按字幕句数估算的音频时长" },
   ];
 
   return (
@@ -465,7 +508,7 @@ function HomeView({
         </Card>
 
         <div className="stats-grid">
-          {stats.map((item) => (
+          {statItems.map((item) => (
             <Card key={item.label} size="sm">
               <CardHeader>
                 <CardDescription>{item.label}</CardDescription>
